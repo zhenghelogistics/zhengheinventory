@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, FileSpreadsheet, Eye, Trash2, Package } from 'lucide-react';
 import { useMovements } from '../hooks/useMovements';
@@ -19,6 +19,18 @@ export default function MovementListPage() {
   const [showVoided, setShowVoided] = useState(false);
   const [toDelete, setToDelete] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -65,25 +77,28 @@ export default function MovementListPage() {
             <FileSpreadsheet size={13} strokeWidth={2.5} />
             Export Excel
           </button>
-          <div className="relative group">
+          <div className="relative" ref={dropdownRef}>
             <button
               disabled={creating}
+              onClick={() => setDropdownOpen((p) => !p)}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-colors cursor-pointer shadow-sm disabled:opacity-60"
             >
               <Plus size={14} strokeWidth={2.5} />
               New Movement
             </button>
-            <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1 hidden group-hover:block z-20">
-              {['Inbound', 'Outbound', 'Internal'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => handleCreate(t)}
-                  className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer"
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-20">
+                {['Inbound', 'Outbound', 'Internal'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => { setDropdownOpen(false); handleCreate(t); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
