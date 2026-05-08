@@ -1,66 +1,93 @@
 import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 
-const KEY = 'inventory_records';
-
-function load() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+// camelCase <-> snake_case mappers
+function toRow(r) {
+  return {
+    id: r.id,
+    description: r.description,
+    quantity: r.quantity,
+    sku: r.sku || null,
+    date_in: r.dateIn || null,
+    date_out: r.dateOut || null,
+    num_packages: r.numPackages ?? null,
+    dimension: r.dimension || null,
+    weight: r.weight || null,
+    expiry_date: r.expiryDate || null,
+    customer_name: r.customerName || null,
+    remark: r.remark || null,
+  };
 }
 
-function save(records) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(records));
-    return null;
-  } catch (e) {
-    if (e.name === 'QuotaExceededError') return 'quota';
-    return 'error';
-  }
+function fromRow(r) {
+  return {
+    id: r.id,
+    description: r.description,
+    quantity: r.quantity,
+    sku: r.sku,
+    dateIn: r.date_in,
+    dateOut: r.date_out,
+    numPackages: r.num_packages,
+    dimension: r.dimension,
+    weight: r.weight,
+    expiryDate: r.expiry_date,
+    customerName: r.customer_name,
+    remark: r.remark,
+  };
 }
 
 export function useInventory() {
-  const [records, setRecords] = useState(load);
-  const [storageError, setStorageError] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const persist = useCallback((next) => {
-    const err = save(next);
-    if (err === 'quota') {
-      setStorageError('Storage full — export your data and clear old records.');
-    } else {
-      setStorageError(null);
+  useEffect(() => {
+    async function fetchAll() {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('inventory_records')
+        .select('*')
+        .order('id', { ascending: true });
+      if (error) setError(error.message);
+      else setRecords((data ?? []).map(fromRow));
+      setLoading(false);
     }
-    setRecords(next);
+    fetchAll();
   }, []);
 
-  const addRecord = useCallback((data) => {
-    setRecords((prev) => {
-      const maxId = prev.length ? Math.max(...prev.map((r) => r.id)) : 0;
-      const next = [...prev, { ...data, id: data.id ?? maxId + 1 }];
-      persist(next);
-      return next;
-    });
-  }, [persist]);
+  const addRecord = useCallback(async (data) => {
+    const maxId = records.length ? Math.max(...records.map((r) => r.id)) : 0;
+    const record = { ...data, id: data.id ?? maxId + 1 };
+    const { data: inserted, error } = await supabase
+      .from('inventory_records')
+      .insert(toRow(record))
+      .select()
+      .single();
+    if (error) { setError(error.message); return; }
+    setRecords((prev) => [...prev, fromRow(inserted)]);
+  }, [records]);
 
-  const updateRecord = useCallback((id, data) => {
-    setRecords((prev) => {
-      const next = prev.map((r) => (r.id === id ? { ...data, id } : r));
-      persist(next);
-      return next;
-    });
-  }, [persist]);
+  const updateRecord = useCallback(async (id, data) => {
+    const { data: updated, error } = await supabase
+      .from('inventory_records')
+      .update(toRow({ ...data, id }))
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) { setError(error.message); return; }
+    setRecords((prev) => prev.map((r) => (r.id === id ? fromRow(updated) : r)));
+  }, []);
 
-  const deleteRecord = useCallback((id) => {
-    setRecords((prev) => {
-      const next = prev.filter((r) => r.id !== id);
-      persist(next);
-      return next;
-    });
-  }, [persist]);
+  const deleteRecord = useCallback(async (id) => {
+    const { error } = await supabase
+      .from('inventory_records')
+      .delete()
+      .eq('id', id);
+    if (error) { setError(error.message); return; }
+    setRecords((prev) => prev.filter((r) => r.id !== id));
+  }, []);
 
   const nextId = records.length ? Math.max(...records.map((r) => r.id)) + 1 : 1;
 
-  return { records, addRecord, updateRecord, deleteRecord, nextId, storageError };
+  return { records, loading, error, addRecord, updateRecord, deleteRecord, nextId };
 }

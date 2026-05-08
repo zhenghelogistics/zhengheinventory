@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Download, Plus } from 'lucide-react';
 import { useInventory } from './hooks/useInventory';
 import { isExpired, isExpiringSoon } from './utils/dateHelpers';
@@ -11,13 +11,15 @@ import ConfirmDialog from './components/ConfirmDialog';
 import Toast from './components/Toast';
 
 export default function App() {
-  const { records, addRecord, updateRecord, deleteRecord, nextId, storageError } = useInventory();
+  const { records, loading, error, addRecord, updateRecord, deleteRecord, nextId } = useInventory();
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(null); // null | 'add' | record object
   const [toDelete, setToDelete] = useState(null);
   const [toast, setToast] = useState('');
+
+  useEffect(() => { if (error) setToast(error); }, [error]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -99,16 +101,26 @@ export default function App() {
 
       {/* Table */}
       <div className="flex-1 bg-white border-t border-slate-100">
-        <InventoryTable
-          records={filtered}
-          onEdit={(r) => setModal(r)}
-          onDelete={(r) => setToDelete(r)}
-        />
+        {loading ? (
+          <div className="flex items-center justify-center py-24 gap-3 text-slate-400">
+            <svg className="animate-spin w-5 h-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <span className="text-sm font-medium">Loading records…</span>
+          </div>
+        ) : (
+          <InventoryTable
+            records={filtered}
+            onEdit={(r) => setModal(r)}
+            onDelete={(r) => setToDelete(r)}
+          />
+        )}
       </div>
 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white px-5 py-2.5 text-xs text-slate-400 text-center">
-        Data stored locally in your browser · No backend required
+        Powered by Supabase · Data synced to the cloud
       </footer>
 
       {/* Modals */}
@@ -129,7 +141,7 @@ export default function App() {
       )}
 
       <Toast
-        message={storageError || toast}
+        message={toast}
         onClose={() => setToast('')}
       />
     </div>
