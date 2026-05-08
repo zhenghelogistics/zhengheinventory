@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 const EMPTY = {
   id: '', description: '', quantity: '', sku: '', dateIn: '', dateOut: '',
@@ -21,10 +21,10 @@ function Field({ label, required, error, hint, children, className = '' }) {
 
 const inputCls = (err) =>
   `px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150 bg-slate-50 focus:bg-white ${
-    err ? 'border-red-400 bg-red-50 focus:bg-white' : 'border-slate-200'
+    err ? 'border-red-400 bg-red-50' : 'border-slate-200'
   }`;
 
-export default function RecordModal({ record, nextId, onSave, onClose, saving = false }) {
+export default function RecordModal({ record, nextId, onSave, onClose }) {
   const isEdit = !!record;
   const [form, setForm] = useState(
     record
@@ -32,6 +32,8 @@ export default function RecordModal({ record, nextId, onSave, onClose, saving = 
       : { ...EMPTY, id: String(nextId) }
   );
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState(null); // null | { type: 'success'|'error', msg: string }
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -46,11 +48,19 @@ export default function RecordModal({ record, nextId, onSave, onClose, saving = 
     return errs;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    onSave({
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      setStatus({ type: 'error', msg: 'Please fix the errors above.' });
+      return;
+    }
+
+    setSaving(true);
+    setStatus(null);
+
+    const data = {
       id: Number(form.id),
       description: form.description.trim(),
       quantity: Number(form.quantity),
@@ -63,18 +73,29 @@ export default function RecordModal({ record, nextId, onSave, onClose, saving = 
       expiryDate: form.expiryDate || null,
       customerName: form.customerName.trim(),
       remark: form.remark.trim(),
-    });
+    };
+
+    try {
+      const ok = await onSave(data);
+      if (ok === false) {
+        setStatus({ type: 'error', msg: 'Save failed — check your connection and try again.' });
+      }
+      // on success, App.jsx closes the modal — no need to handle here
+    } catch (err) {
+      setStatus({ type: 'error', msg: err?.message ?? 'Unexpected error.' });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6">
-      {/* form wraps the whole card so submit works from the sticky footer */}
       <form
         onSubmit={handleSubmit}
         noValidate
         className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
       >
-        {/* Sticky header */}
+        {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-base font-bold text-slate-800">
@@ -161,12 +182,27 @@ export default function RecordModal({ record, nextId, onSave, onClose, saving = 
           </div>
         </div>
 
-        {/* Sticky footer — always visible */}
+        {/* Inline status bar */}
+        {status && (
+          <div className={`flex-shrink-0 flex items-center gap-2 px-6 py-3 text-sm font-medium ${
+            status.type === 'success'
+              ? 'bg-emerald-50 text-emerald-700 border-t border-emerald-100'
+              : 'bg-red-50 text-red-700 border-t border-red-100'
+          }`}>
+            {status.type === 'success'
+              ? <CheckCircle2 size={15} strokeWidth={2} />
+              : <AlertCircle size={15} strokeWidth={2} />}
+            {status.msg}
+          </div>
+        )}
+
+        {/* Sticky footer */}
         <div className="flex-shrink-0 flex justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-white rounded-b-2xl">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors duration-150 cursor-pointer"
+            disabled={saving}
+            className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors duration-150 cursor-pointer"
           >
             Cancel
           </button>
@@ -175,12 +211,7 @@ export default function RecordModal({ record, nextId, onSave, onClose, saving = 
             disabled={saving}
             className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-150 cursor-pointer shadow-sm"
           >
-            {saving && (
-              <svg className="animate-spin w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-              </svg>
-            )}
+            {saving && <Loader2 size={14} strokeWidth={2} className="animate-spin" />}
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Record'}
           </button>
         </div>

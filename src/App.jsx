@@ -18,7 +18,6 @@ export default function App() {
   const [modal, setModal] = useState(null); // null | 'add' | record object
   const [toDelete, setToDelete] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
-  const [saving, setSaving] = useState(false);
   const [flashId, setFlashId] = useState(null);
 
   useEffect(() => {
@@ -40,23 +39,18 @@ export default function App() {
   }, [records, search, filter]);
 
   async function handleSave(data) {
-    setSaving(true);
     const isAdd = modal === 'add';
     try {
       const ok = isAdd ? await addRecord(data) : await updateRecord(modal.id, data);
       if (ok) {
-        const savedId = data.id;
         setModal(null);
         setToast({ message: isAdd ? 'Record added.' : 'Changes saved.', type: 'success' });
-        setFlashId(savedId);
+        setFlashId(data.id);
         setTimeout(() => setFlashId(null), 2500);
-      } else {
-        setToast({ message: 'Save failed — please try again.', type: 'error' });
       }
+      return ok;
     } catch (e) {
-      setToast({ message: `Error: ${e.message}`, type: 'error' });
-    } finally {
-      setSaving(false);
+      return false;
     }
   }
 
@@ -150,7 +144,6 @@ export default function App() {
           nextId={nextId}
           onSave={handleSave}
           onClose={() => setModal(null)}
-          saving={saving}
         />
       )}
       {toDelete && (
