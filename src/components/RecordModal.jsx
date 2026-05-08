@@ -67,10 +67,15 @@ export default function RecordModal({ record, nextId, onSave, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 backdrop-blur-sm overflow-y-auto py-8 px-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6">
+      {/* form wraps the whole card so submit works from the sticky footer */}
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
+      >
+        {/* Sticky header */}
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-base font-bold text-slate-800">
               {isEdit ? 'Edit Record' : 'Add New Record'}
@@ -80,6 +85,7 @@ export default function RecordModal({ record, nextId, onSave, onClose }) {
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
@@ -88,81 +94,90 @@ export default function RecordModal({ record, nextId, onSave, onClose }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate className="px-6 py-5">
-          {/* Section: Core */}
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Core Details</p>
-          <div className="grid grid-cols-2 gap-4 mb-5">
-            <Field label="No." error={errors.id}>
-              <input className={`${inputCls(errors.id)} tabular-nums`} value={form.id} onChange={set('id')} />
-            </Field>
-            <Field label="Description" required error={errors.description}>
-              <input className={inputCls(errors.description)} value={form.description} onChange={set('description')} placeholder="Item name or description" />
-            </Field>
-            <Field label="Quantity" required error={errors.quantity}>
-              <input type="number" min="0" className={`${inputCls(errors.quantity)} tabular-nums`} value={form.quantity} onChange={set('quantity')} placeholder="0" />
-            </Field>
-            <Field label="SKU">
-              <input className={inputCls()} value={form.sku} onChange={set('sku')} placeholder="Stock keeping unit" />
-            </Field>
+        {/* Scrollable fields */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+          {/* Core */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Core Details</p>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="No." error={errors.id}>
+                <input className={`${inputCls(errors.id)} tabular-nums`} value={form.id} onChange={set('id')} />
+              </Field>
+              <Field label="Description" required error={errors.description}>
+                <input className={inputCls(errors.description)} value={form.description} onChange={set('description')} placeholder="Item name or description" />
+              </Field>
+              <Field label="Quantity" required error={errors.quantity}>
+                <input type="number" min="0" className={`${inputCls(errors.quantity)} tabular-nums`} value={form.quantity} onChange={set('quantity')} placeholder="0" />
+              </Field>
+              <Field label="SKU">
+                <input className={inputCls()} value={form.sku} onChange={set('sku')} placeholder="Stock keeping unit" />
+              </Field>
+            </div>
           </div>
 
-          {/* Section: Dates */}
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Dates</p>
-          <div className="grid grid-cols-3 gap-4 mb-5">
-            <Field label="Date In">
-              <input type="date" className={inputCls()} value={form.dateIn} onChange={set('dateIn')} />
-            </Field>
-            <Field label="Date Out" error={errors.dateOut}>
-              <input type="date" className={inputCls(errors.dateOut)} value={form.dateOut} onChange={set('dateOut')} />
-            </Field>
-            <Field label="Expiry Date">
-              <input type="date" className={inputCls()} value={form.expiryDate} onChange={set('expiryDate')} />
-            </Field>
+          {/* Dates */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Dates</p>
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="Date In">
+                <input type="date" className={inputCls()} value={form.dateIn} onChange={set('dateIn')} />
+              </Field>
+              <Field label="Date Out" error={errors.dateOut}>
+                <input type="date" className={inputCls(errors.dateOut)} value={form.dateOut} onChange={set('dateOut')} />
+              </Field>
+              <Field label="Expiry Date">
+                <input type="date" className={inputCls()} value={form.expiryDate} onChange={set('expiryDate')} />
+              </Field>
+            </div>
           </div>
 
-          {/* Section: Physical */}
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Physical</p>
-          <div className="grid grid-cols-3 gap-4 mb-5">
-            <Field label="No. of Pkgs" error={errors.numPackages}>
-              <input type="number" min="0" className={`${inputCls(errors.numPackages)} tabular-nums`} value={form.numPackages} onChange={set('numPackages')} placeholder="0" />
-            </Field>
-            <Field label="Dimension" hint="(free text)">
-              <input className={inputCls()} placeholder="30x20x10 cm" value={form.dimension} onChange={set('dimension')} />
-            </Field>
-            <Field label="Weight" hint="(free text)">
-              <input className={inputCls()} placeholder="2.5 kg" value={form.weight} onChange={set('weight')} />
-            </Field>
+          {/* Physical */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Physical</p>
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="No. of Pkgs" error={errors.numPackages}>
+                <input type="number" min="0" className={`${inputCls(errors.numPackages)} tabular-nums`} value={form.numPackages} onChange={set('numPackages')} placeholder="0" />
+              </Field>
+              <Field label="Dimension" hint="(free text)">
+                <input className={inputCls()} placeholder="30x20x10 cm" value={form.dimension} onChange={set('dimension')} />
+              </Field>
+              <Field label="Weight" hint="(free text)">
+                <input className={inputCls()} placeholder="2.5 kg" value={form.weight} onChange={set('weight')} />
+              </Field>
+            </div>
           </div>
 
-          {/* Section: Customer */}
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Customer & Notes</p>
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <Field label="Customer Name">
-              <input className={inputCls()} value={form.customerName} onChange={set('customerName')} placeholder="Customer or company" />
-            </Field>
-            <Field label="Remark">
-              <textarea rows={2} className={`${inputCls()} resize-none`} value={form.remark} onChange={set('remark')} placeholder="Additional notes…" />
-            </Field>
+          {/* Customer */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Customer & Notes</p>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Customer Name">
+                <input className={inputCls()} value={form.customerName} onChange={set('customerName')} placeholder="Customer or company" />
+              </Field>
+              <Field label="Remark">
+                <textarea rows={2} className={`${inputCls()} resize-none`} value={form.remark} onChange={set('remark')} placeholder="Additional notes…" />
+              </Field>
+            </div>
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors duration-150 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-colors duration-150 cursor-pointer shadow-sm"
-            >
-              {isEdit ? 'Save Changes' : 'Add Record'}
-            </button>
-          </div>
-        </form>
-      </div>
+        {/* Sticky footer — always visible */}
+        <div className="flex-shrink-0 flex justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-white rounded-b-2xl">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors duration-150 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-colors duration-150 cursor-pointer shadow-sm"
+          >
+            {isEdit ? 'Save Changes' : 'Add Record'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
