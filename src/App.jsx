@@ -1,164 +1,79 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Download, Plus } from 'lucide-react';
-import { useInventory } from './hooks/useInventory';
-import { isExpired, isExpiringSoon } from './utils/dateHelpers';
-import { exportToCSV } from './utils/csvExport';
-import SummaryBar from './components/SummaryBar';
-import SearchBar from './components/SearchBar';
-import InventoryTable from './components/InventoryTable';
-import RecordModal from './components/RecordModal';
-import ConfirmDialog from './components/ConfirmDialog';
-import Toast from './components/Toast';
+import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import InventoryPage from './pages/InventoryPage';
+import MovementListPage from './pages/MovementListPage';
+import MovementDetailPage from './pages/MovementDetailPage';
+
+const NAV = [
+  {
+    to: '/',
+    end: true,
+    label: 'Inventory',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+        <line x1="12" y1="22.08" x2="12" y2="12"/>
+      </svg>
+    ),
+  },
+  {
+    to: '/movements',
+    end: false,
+    label: 'Stock Movements',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="3" width="15" height="13"/>
+        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+        <circle cx="5.5" cy="18.5" r="2.5"/>
+        <circle cx="18.5" cy="18.5" r="2.5"/>
+      </svg>
+    ),
+  },
+];
 
 export default function App() {
-  const { records, loading, error, addRecord, updateRecord, deleteRecord, nextId } = useInventory();
-
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [modal, setModal] = useState(null); // null | 'add' | record object
-  const [toDelete, setToDelete] = useState(null);
-  const [toast, setToast] = useState({ message: '', type: 'success' });
-  const [flashId, setFlashId] = useState(null);
-
-  useEffect(() => {
-    if (error) setToast({ message: error, type: 'error' });
-  }, [error]);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return records.filter((r) => {
-      const matchSearch = !q || [r.description, r.sku, r.customerName, r.remark]
-        .some((f) => (f ?? '').toLowerCase().includes(q));
-      const matchFilter =
-        filter === 'all' ||
-        (filter === 'expired' && isExpired(r.expiryDate)) ||
-        (filter === 'expiring' && isExpiringSoon(r.expiryDate)) ||
-        (filter === 'no-expiry' && !r.expiryDate);
-      return matchSearch && matchFilter;
-    });
-  }, [records, search, filter]);
-
-  async function handleSave(data) {
-    const isAdd = modal === 'add';
-    try {
-      const ok = isAdd ? await addRecord(data) : await updateRecord(modal.id, data);
-      if (ok) {
-        setModal(null);
-        setToast({ message: isAdd ? 'Record added.' : 'Changes saved.', type: 'success' });
-        setFlashId(data.id);
-        setTimeout(() => setFlashId(null), 2500);
-      }
-      return ok;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function handleDeleteConfirm() {
-    deleteRecord(toDelete.id);
-    setToDelete(null);
-  }
-
-  function handleExport() {
-    if (records.length === 0) { setToast({ message: 'No records to export.', type: 'error' }); return; }
-    exportToCSV(records);
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'Fira Sans', system-ui, sans-serif" }}>
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-700 flex items-center justify-center flex-shrink-0">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      {/* Top header */}
+      <header className="bg-blue-700 px-5 py-0 flex items-center h-12 shrink-0 z-30">
+        <div className="flex items-center gap-2.5 mr-8">
+          <div className="w-7 h-7 rounded-md bg-white/20 flex items-center justify-center">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
               <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
               <line x1="12" y1="22.08" x2="12" y2="12"/>
             </svg>
           </div>
-          <div>
-            <h1 className="text-sm font-bold text-slate-800 leading-none">Inventory Tracker</h1>
-            <p className="text-xs text-slate-400 mt-0.5 leading-none">{records.length} items stored locally</p>
-          </div>
+          <span className="text-sm font-bold text-white tracking-wide">Zhenghe Logistics</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150 cursor-pointer"
-          >
-            <Download size={13} strokeWidth={2.5} />
-            Export CSV
-          </button>
-          <button
-            onClick={() => setModal('add')}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-colors duration-150 cursor-pointer shadow-sm"
-          >
-            <Plus size={14} strokeWidth={2.5} />
-            Add Item
-          </button>
-        </div>
+        <nav className="flex items-center gap-1 h-full">
+          {NAV.map(({ to, end, label, icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-4 h-full text-xs font-semibold transition-colors duration-150 cursor-pointer ` +
+                (isActive
+                  ? 'text-white border-b-2 border-white'
+                  : 'text-blue-200 hover:text-white border-b-2 border-transparent')
+              }
+            >
+              {icon}
+              {label}
+            </NavLink>
+          ))}
+        </nav>
       </header>
 
-      {/* Summary KPI cards */}
-      <SummaryBar records={records} />
-
-      {/* Search + filter */}
-      <SearchBar
-        search={search}
-        setSearch={setSearch}
-        filter={filter}
-        setFilter={setFilter}
-        total={records.length}
-        showing={filtered.length}
-      />
-
-      {/* Table */}
-      <div className="flex-1 bg-white border-t border-slate-100">
-        {loading ? (
-          <div className="flex items-center justify-center py-24 gap-3 text-slate-400">
-            <svg className="animate-spin w-5 h-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-            </svg>
-            <span className="text-sm font-medium">Loading records…</span>
-          </div>
-        ) : (
-          <InventoryTable
-            records={filtered}
-            onEdit={(r) => setModal(r)}
-            onDelete={(r) => setToDelete(r)}
-            flashId={flashId}
-          />
-        )}
-      </div>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white px-5 py-2.5 text-xs text-slate-400 text-center">
-        Powered by Supabase · Data synced to the cloud
-      </footer>
-
-      {/* Modals */}
-      {modal && (
-        <RecordModal
-          record={modal === 'add' ? null : modal}
-          nextId={nextId}
-          onSave={handleSave}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {toDelete && (
-        <ConfirmDialog
-          message="Delete this record? This cannot be undone."
-          onConfirm={handleDeleteConfirm}
-          onCancel={() => setToDelete(null)}
-        />
-      )}
-
-      <Toast
-        message={toast.message}
-        type={toast.type}
-        onClose={() => setToast({ message: '', type: 'success' })}
-      />
+      {/* Page content */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <Routes>
+          <Route path="/" element={<InventoryPage />} />
+          <Route path="/movements" element={<MovementListPage />} />
+          <Route path="/movements/:id" element={<MovementDetailPage />} />
+        </Routes>
+      </main>
     </div>
   );
 }
