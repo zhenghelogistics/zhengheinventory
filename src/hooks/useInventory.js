@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
+function withTimeout(promise, ms = 10000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timed out after ${ms / 1000}s — check your connection`)), ms)
+    ),
+  ]);
+}
+
 // camelCase <-> snake_case mappers
 function toRow(r) {
   return {
@@ -59,11 +68,9 @@ export function useInventory() {
     try {
       const maxId = records.length ? Math.max(...records.map((r) => r.id)) : 0;
       const record = { ...data, id: data.id ?? maxId + 1 };
-      const { data: inserted, error } = await supabase
-        .from('inventory_records')
-        .insert(toRow(record))
-        .select()
-        .single();
+      const { data: inserted, error } = await withTimeout(
+        supabase.from('inventory_records').insert(toRow(record)).select().single()
+      );
       if (error) { setError(error.message); return false; }
       setRecords((prev) => [...prev, fromRow(inserted)]);
       return true;
@@ -75,12 +82,9 @@ export function useInventory() {
 
   const updateRecord = useCallback(async (id, data) => {
     try {
-      const { data: updated, error } = await supabase
-        .from('inventory_records')
-        .update(toRow({ ...data, id }))
-        .eq('id', id)
-        .select()
-        .single();
+      const { data: updated, error } = await withTimeout(
+        supabase.from('inventory_records').update(toRow({ ...data, id })).eq('id', id).select().single()
+      );
       if (error) { setError(error.message); return false; }
       setRecords((prev) => prev.map((r) => (r.id === id ? fromRow(updated) : r)));
       return true;
@@ -92,10 +96,9 @@ export function useInventory() {
 
   const deleteRecord = useCallback(async (id) => {
     try {
-      const { error } = await supabase
-        .from('inventory_records')
-        .delete()
-        .eq('id', id);
+      const { error } = await withTimeout(
+        supabase.from('inventory_records').delete().eq('id', id)
+      );
       if (error) { setError(error.message); return; }
       setRecords((prev) => prev.filter((r) => r.id !== id));
     } catch (e) {
