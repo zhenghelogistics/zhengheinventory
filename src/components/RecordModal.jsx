@@ -28,7 +28,20 @@ export default function RecordModal({ record, nextId, onSave, onClose }) {
   const isEdit = !!record;
   const [form, setForm] = useState(
     record
-      ? { ...record, id: String(record.id), quantity: String(record.quantity), numPackages: String(record.numPackages ?? '') }
+      ? {
+          id: String(record.id),
+          description: record.description ?? '',
+          quantity: String(record.quantity ?? 0),
+          sku: record.sku ?? '',
+          dateIn: record.dateIn ?? '',
+          dateOut: record.dateOut ?? '',
+          numPackages: String(record.numPackages ?? ''),
+          dimension: record.dimension ?? '',
+          weight: record.weight ?? '',
+          expiryDate: record.expiryDate ?? '',
+          customerName: record.customerName ?? '',
+          remark: record.remark ?? '',
+        }
       : { ...EMPTY, id: String(nextId) }
   );
   const [errors, setErrors] = useState({});
