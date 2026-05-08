@@ -56,37 +56,51 @@ export function useInventory() {
   }, []);
 
   const addRecord = useCallback(async (data) => {
-    const maxId = records.length ? Math.max(...records.map((r) => r.id)) : 0;
-    const record = { ...data, id: data.id ?? maxId + 1 };
-    const { data: inserted, error } = await supabase
-      .from('inventory_records')
-      .insert(toRow(record))
-      .select()
-      .single();
-    if (error) { setError(error.message); return false; }
-    setRecords((prev) => [...prev, fromRow(inserted)]);
-    return true;
+    try {
+      const maxId = records.length ? Math.max(...records.map((r) => r.id)) : 0;
+      const record = { ...data, id: data.id ?? maxId + 1 };
+      const { data: inserted, error } = await supabase
+        .from('inventory_records')
+        .insert(toRow(record))
+        .select()
+        .single();
+      if (error) { setError(error.message); return false; }
+      setRecords((prev) => [...prev, fromRow(inserted)]);
+      return true;
+    } catch (e) {
+      setError(e.message);
+      return false;
+    }
   }, [records]);
 
   const updateRecord = useCallback(async (id, data) => {
-    const { data: updated, error } = await supabase
-      .from('inventory_records')
-      .update(toRow({ ...data, id }))
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) { setError(error.message); return false; }
-    setRecords((prev) => prev.map((r) => (r.id === id ? fromRow(updated) : r)));
-    return true;
+    try {
+      const { data: updated, error } = await supabase
+        .from('inventory_records')
+        .update(toRow({ ...data, id }))
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) { setError(error.message); return false; }
+      setRecords((prev) => prev.map((r) => (r.id === id ? fromRow(updated) : r)));
+      return true;
+    } catch (e) {
+      setError(e.message);
+      return false;
+    }
   }, []);
 
   const deleteRecord = useCallback(async (id) => {
-    const { error } = await supabase
-      .from('inventory_records')
-      .delete()
-      .eq('id', id);
-    if (error) { setError(error.message); return; }
-    setRecords((prev) => prev.filter((r) => r.id !== id));
+    try {
+      const { error } = await supabase
+        .from('inventory_records')
+        .delete()
+        .eq('id', id);
+      if (error) { setError(error.message); return; }
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+    } catch (e) {
+      setError(e.message);
+    }
   }, []);
 
   const nextId = records.length ? Math.max(...records.map((r) => r.id)) + 1 : 1;

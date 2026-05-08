@@ -41,13 +41,18 @@ export default function App() {
   async function handleSave(data) {
     setSaving(true);
     const isAdd = modal === 'add';
-    const ok = isAdd ? await addRecord(data) : await updateRecord(modal.id, data);
-    setSaving(false);
-    if (ok) {
-      setModal(null);
-      setToast({ message: isAdd ? 'Record added.' : 'Changes saved.', type: 'success' });
-    } else {
-      setToast({ message: 'Save failed — please try again.', type: 'error' });
+    try {
+      const ok = isAdd ? await addRecord(data) : await updateRecord(modal.id, data);
+      if (ok) {
+        setModal(null);
+        setToast({ message: isAdd ? 'Record added.' : 'Changes saved.', type: 'success' });
+      } else {
+        setToast({ message: 'Save failed — please try again.', type: 'error' });
+      }
+    } catch (e) {
+      setToast({ message: `Error: ${e.message}`, type: 'error' });
+    } finally {
+      setSaving(false);
     }
   }
 
