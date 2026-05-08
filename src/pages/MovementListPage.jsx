@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Download, FileSpreadsheet, Eye, Trash2, TrendingUp, TrendingDown, Package, DollarSign } from 'lucide-react';
+import { Plus, Search, FileSpreadsheet, Eye, Trash2, Package } from 'lucide-react';
 import { useMovements } from '../hooks/useMovements';
 import { fmt, fmtDate, STATUS_COLORS, TYPE_COLORS, calcMovementTotals } from '../utils/movementHelpers';
 import { exportMovementsExcel } from '../utils/excelExport';
@@ -35,16 +35,7 @@ export default function MovementListPage() {
     });
   }, [movements, search, typeFilter, statusFilter, showVoided]);
 
-  const metrics = useMemo(() => {
-    const active = movements.filter((m) => m.status !== 'Voided');
-    const totalCost = active.reduce((s, m) => s + (m.cost_lines || []).reduce((a, l) => a + (Number(l.amount_sgd) || 0), 0), 0);
-    const totalSale = active.reduce((s, m) => s + (Number(m.total_sale) || 0), 0);
-    const profit = totalSale - totalCost;
-    const gp = totalSale > 0 ? ((profit / totalSale) * 100).toFixed(1) : '0.0';
-    const inbound = active.filter((m) => m.type === 'Inbound').length;
-    const outbound = active.filter((m) => m.type === 'Outbound').length;
-    return { totalCost, totalSale, profit, gp, inbound, outbound, count: active.length };
-  }, [movements]);
+  const activeCount = useMemo(() => movements.filter((m) => m.status !== 'Voided').length, [movements]);
 
   async function handleCreate(type) {
     setCreating(true);
@@ -64,7 +55,7 @@ export default function MovementListPage() {
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <div>
           <h2 className="text-base font-bold text-slate-800">Stock Movements</h2>
-          <p className="text-xs text-slate-400 mt-0.5">{metrics.count} active movements</p>
+          <p className="text-xs text-slate-400 mt-0.5">{activeCount} active movements</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -95,38 +86,6 @@ export default function MovementListPage() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-4 bg-slate-50 border-b border-slate-200">
-        <MetricCard
-          label="Total Movements"
-          value={metrics.count}
-          sub={`${metrics.inbound} in · ${metrics.outbound} out`}
-          icon={<Package size={16} className="text-violet-600" />}
-          color="bg-violet-50 border-violet-100"
-        />
-        <MetricCard
-          label="Total Cost"
-          value={`S$ ${fmt(metrics.totalCost)}`}
-          sub="sum of cost lines"
-          icon={<TrendingDown size={16} className="text-red-500" />}
-          color="bg-red-50 border-red-100"
-        />
-        <MetricCard
-          label="Total Sale"
-          value={`S$ ${fmt(metrics.totalSale)}`}
-          sub="sum of sales"
-          icon={<DollarSign size={16} className="text-emerald-600" />}
-          color="bg-emerald-50 border-emerald-100"
-        />
-        <MetricCard
-          label="Gross Profit"
-          value={`S$ ${fmt(metrics.profit)}`}
-          sub={`GP ${metrics.gp}%`}
-          icon={<TrendingUp size={16} className={metrics.profit >= 0 ? 'text-emerald-600' : 'text-red-500'} />}
-          color={metrics.profit >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}
-        />
       </div>
 
       {/* Filters */}
@@ -256,19 +215,6 @@ export default function MovementListPage() {
           onCancel={() => setToDelete(null)}
         />
       )}
-    </div>
-  );
-}
-
-function MetricCard({ label, value, sub, icon, color }) {
-  return (
-    <div className={`rounded-xl border p-4 ${color}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-slate-500">{label}</span>
-        <div className="w-7 h-7 rounded-lg bg-white/70 flex items-center justify-center">{icon}</div>
-      </div>
-      <div className="text-lg font-bold text-slate-800 tabular-nums leading-tight">{value}</div>
-      <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>
     </div>
   );
 }
