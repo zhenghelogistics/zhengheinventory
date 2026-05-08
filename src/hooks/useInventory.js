@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-function withTimeout(promise, ms = 10000) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Request timed out after ${ms / 1000}s — check your connection`)), ms)
-    ),
-  ]);
+function withTimeout(supabaseQuery, ms = 10000) {
+  // Explicitly bridge Supabase's custom thenable into a native Promise
+  // before racing — Promise.race alone doesn't work reliably with Supabase's thenable
+  const queryPromise = new Promise((resolve, reject) => {
+    supabaseQuery.then(resolve).catch(reject);
+  });
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`Request timed out after ${ms / 1000}s — check your connection`)), ms)
+  );
+  return Promise.race([queryPromise, timeoutPromise]);
 }
 
 // camelCase <-> snake_case mappers

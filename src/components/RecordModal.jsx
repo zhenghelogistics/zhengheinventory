@@ -75,16 +75,29 @@ export default function RecordModal({ record, nextId, onSave, onClose }) {
       remark: form.remark.trim(),
     };
 
+    // Hard UI timeout — stops the spinner no matter what
+    let timedOut = false;
+    const uiTimer = setTimeout(() => {
+      timedOut = true;
+      setSaving(false);
+      setStatus({ type: 'error', msg: 'Request timed out — check your internet connection and try again.' });
+    }, 12000);
+
     try {
       const ok = await onSave(data);
-      if (ok === false) {
-        setStatus({ type: 'error', msg: 'Save failed — check your connection and try again.' });
+      clearTimeout(uiTimer);
+      if (!timedOut) {
+        if (ok === false) {
+          setStatus({ type: 'error', msg: 'Save failed — check your connection and try again.' });
+        }
       }
-      // on success, App.jsx closes the modal — no need to handle here
     } catch (err) {
-      setStatus({ type: 'error', msg: err?.message ?? 'Unexpected error.' });
+      clearTimeout(uiTimer);
+      if (!timedOut) {
+        setStatus({ type: 'error', msg: err?.message ?? 'Unexpected error.' });
+      }
     } finally {
-      setSaving(false);
+      if (!timedOut) setSaving(false);
     }
   }
 
