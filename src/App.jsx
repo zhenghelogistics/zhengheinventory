@@ -19,6 +19,7 @@ export default function App() {
   const [toDelete, setToDelete] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [saving, setSaving] = useState(false);
+  const [flashId, setFlashId] = useState(null);
 
   useEffect(() => {
     if (error) setToast({ message: error, type: 'error' });
@@ -44,8 +45,11 @@ export default function App() {
     try {
       const ok = isAdd ? await addRecord(data) : await updateRecord(modal.id, data);
       if (ok) {
+        const savedId = data.id;
         setModal(null);
         setToast({ message: isAdd ? 'Record added.' : 'Changes saved.', type: 'success' });
+        setFlashId(savedId);
+        setTimeout(() => setFlashId(null), 2500);
       } else {
         setToast({ message: 'Save failed — please try again.', type: 'error' });
       }
@@ -129,6 +133,7 @@ export default function App() {
             records={filtered}
             onEdit={(r) => setModal(r)}
             onDelete={(r) => setToDelete(r)}
+            flashId={flashId}
           />
         )}
       </div>

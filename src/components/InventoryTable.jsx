@@ -51,7 +51,7 @@ function SortIcon({ col, sortKey, sortDir }) {
     : <ChevronDown size={12} strokeWidth={2.5} className="text-blue-600 ml-1 flex-shrink-0" />;
 }
 
-export default function InventoryTable({ records, onEdit, onDelete }) {
+export default function InventoryTable({ records, onEdit, onDelete, flashId }) {
   const [sortKey, setSortKey] = useState('id');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(1);
@@ -114,7 +114,7 @@ export default function InventoryTable({ records, onEdit, onDelete }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {pageRecords.map((r) => (
-              <tr key={r.id} className={`${rowStyle(r)} transition-colors duration-100`}>
+              <tr key={r.id} className={`${flashId === r.id ? 'bg-emerald-50 outline outline-2 outline-emerald-400 outline-offset-[-2px]' : rowStyle(r)} transition-colors duration-500`}>
                 <td className="px-3 py-2.5 text-slate-400 tabular-nums text-xs font-medium">{r.id}</td>
                 <td className="px-3 py-2.5 font-semibold text-slate-800 max-w-[180px]">
                   <span className="block truncate">{r.description}</span>
