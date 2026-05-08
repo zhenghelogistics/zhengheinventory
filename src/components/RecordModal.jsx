@@ -24,7 +24,7 @@ const inputCls = (err) =>
     err ? 'border-red-400 bg-red-50 focus:bg-white' : 'border-slate-200'
   }`;
 
-export default function RecordModal({ record, nextId, onSave, onClose }) {
+export default function RecordModal({ record, nextId, onSave, onClose, saving = false }) {
   const isEdit = !!record;
   const [form, setForm] = useState(
     record
@@ -172,9 +172,16 @@ export default function RecordModal({ record, nextId, onSave, onClose }) {
           </button>
           <button
             type="submit"
-            className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-colors duration-150 cursor-pointer shadow-sm"
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-150 cursor-pointer shadow-sm"
           >
-            {isEdit ? 'Save Changes' : 'Add Record'}
+            {saving && (
+              <svg className="animate-spin w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+            )}
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Record'}
           </button>
         </div>
       </form>

@@ -63,8 +63,9 @@ export function useInventory() {
       .insert(toRow(record))
       .select()
       .single();
-    if (error) { setError(error.message); return; }
+    if (error) { setError(error.message); return false; }
     setRecords((prev) => [...prev, fromRow(inserted)]);
+    return true;
   }, [records]);
 
   const updateRecord = useCallback(async (id, data) => {
@@ -74,8 +75,9 @@ export function useInventory() {
       .eq('id', id)
       .select()
       .single();
-    if (error) { setError(error.message); return; }
+    if (error) { setError(error.message); return false; }
     setRecords((prev) => prev.map((r) => (r.id === id ? fromRow(updated) : r)));
+    return true;
   }, []);
 
   const deleteRecord = useCallback(async (id) => {

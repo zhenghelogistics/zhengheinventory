@@ -17,9 +17,12 @@ export default function App() {
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(null); // null | 'add' | record object
   const [toDelete, setToDelete] = useState(null);
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (error) setToast(error); }, [error]);
+  useEffect(() => {
+    if (error) setToast({ message: error, type: 'error' });
+  }, [error]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -35,10 +38,17 @@ export default function App() {
     });
   }, [records, search, filter]);
 
-  function handleSave(data) {
-    if (modal === 'add') addRecord(data);
-    else updateRecord(modal.id, data);
-    setModal(null);
+  async function handleSave(data) {
+    setSaving(true);
+    const isAdd = modal === 'add';
+    const ok = isAdd ? await addRecord(data) : await updateRecord(modal.id, data);
+    setSaving(false);
+    if (ok) {
+      setModal(null);
+      setToast({ message: isAdd ? 'Record added.' : 'Changes saved.', type: 'success' });
+    } else {
+      setToast({ message: 'Save failed — please try again.', type: 'error' });
+    }
   }
 
   function handleDeleteConfirm() {
@@ -47,7 +57,7 @@ export default function App() {
   }
 
   function handleExport() {
-    if (records.length === 0) { setToast('No records to export.'); return; }
+    if (records.length === 0) { setToast({ message: 'No records to export.', type: 'error' }); return; }
     exportToCSV(records);
   }
 
@@ -130,6 +140,7 @@ export default function App() {
           nextId={nextId}
           onSave={handleSave}
           onClose={() => setModal(null)}
+          saving={saving}
         />
       )}
       {toDelete && (
@@ -141,8 +152,9 @@ export default function App() {
       )}
 
       <Toast
-        message={toast}
-        onClose={() => setToast('')}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: '', type: 'success' })}
       />
     </div>
   );
