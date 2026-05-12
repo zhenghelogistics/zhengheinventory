@@ -307,8 +307,7 @@ export default function MovementDetailPage() {
               onAdd={addStockLine}
               onUpdate={updateStockLine}
               onDelete={deleteStockLine}
-              showCost={form.type !== 'Outbound'}
-            />
+              />
           </Section>
 
           {/* P&L Summary */}
