@@ -5,11 +5,7 @@ import { fmtDate } from '../../utils/movementHelpers';
 const UNITS = ['pcs', 'box', 'carton', 'pallet', 'kg', 'bag', 'roll', 'set', 'drum', 'unit'];
 const TODAY = new Date().toISOString().split('T')[0];
 
-const LINE_TYPES = {
-  in:   ['Inbound', 'Replenishment'],
-  out:  ['Outbound'],
-  both: ['Inbound', 'Replenishment', 'Outbound'],
-};
+const LINE_TYPES = ['Inbound', 'Replenishment', 'Outbound'];
 
 const LINE_TYPE_COLORS = {
   'Inbound':      'bg-violet-100 text-violet-700',
@@ -40,7 +36,7 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
   const showBalance = mode === 'both';
 
   function startEdit(line) {
-    const defaultType = mode === 'out' ? 'Outbound' : (line.line_type || 'Inbound');
+    const defaultType = line.line_type || 'Inbound';
     setEditId(line.id);
     setDraft({
       line_type: line.line_type || defaultType,
@@ -131,7 +127,7 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
                 <tr key={line.id} className="bg-blue-50/60 border-b border-blue-100">
                   <td className="px-2 py-1.5">
                     <select className={inp} value={draft.line_type} onChange={(e) => setDraft((p) => ({ ...p, line_type: e.target.value }))}>
-                      {(LINE_TYPES[mode] || LINE_TYPES.both).map((t) => <option key={t}>{t}</option>)}
+                      {LINE_TYPES.map((t) => <option key={t}>{t}</option>)}
                     </select>
                   </td>
                   <td className="px-2 py-1.5"><input className={inp} value={draft.sku} onChange={(e) => setDraft((p) => ({ ...p, sku: e.target.value }))} placeholder="SKU" /></td>
