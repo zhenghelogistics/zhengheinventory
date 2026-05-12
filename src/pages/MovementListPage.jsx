@@ -6,10 +6,10 @@ import { fmt, fmtDate, STATUS_COLORS, TYPE_COLORS } from '../utils/movementHelpe
 import { exportMovementsExcel } from '../utils/excelExport';
 import ConfirmDialog from '../components/ConfirmDialog';
 
-const MOVEMENT_TYPES = ['Inbound', 'Replenishment', 'Outbound', 'Internal'];
+const MOVEMENT_TYPES = ['Inbound', 'Outbound', 'Internal'];
 const FILTER_TYPES = ['All Types', ...MOVEMENT_TYPES];
 const STATUSES = ['All Statuses', 'New', 'In Progress', 'Completed', 'Voided'];
-const INBOUND_TYPES = new Set(['Inbound', 'Replenishment']);
+const INBOUND_TYPES = new Set(['Inbound']);
 
 export default function MovementListPage() {
   const navigate = useNavigate();
@@ -166,10 +166,10 @@ export default function MovementListPage() {
                     onClick={() => { setDropdownOpen(false); handleCreate(t); }}
                     className="w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 cursor-pointer flex items-center gap-2"
                   >
-                    <span className={`w-2 h-2 rounded-full ${t === 'Inbound' ? 'bg-violet-500' : t === 'Replenishment' ? 'bg-blue-500' : t === 'Outbound' ? 'bg-orange-500' : 'bg-cyan-500'}`} />
+                    <span className={`w-2 h-2 rounded-full ${t === 'Inbound' ? 'bg-violet-500' : t === 'Outbound' ? 'bg-orange-500' : 'bg-cyan-500'}`} />
                     <span className="text-slate-700 font-medium">{t}</span>
                     <span className="text-slate-400 text-[10px] ml-auto">
-                      {t === 'Inbound' ? 'first delivery' : t === 'Replenishment' ? 'top up stock' : t === 'Outbound' ? 'dispatch out' : 'warehouse transfer'}
+                      {t === 'Inbound' ? 'receiving stock' : t === 'Outbound' ? 'dispatch out' : 'warehouse transfer'}
                     </span>
                   </button>
                 ))}

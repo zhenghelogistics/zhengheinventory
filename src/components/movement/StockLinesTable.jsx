@@ -75,20 +75,6 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
 
   return (
     <div className="space-y-3">
-      {/* Mode label */}
-      <div className="flex items-center gap-2">
-        <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${
-          mode === 'in' ? 'bg-violet-100 text-violet-700' :
-          mode === 'out' ? 'bg-orange-100 text-orange-700' :
-          'bg-cyan-100 text-cyan-700'
-        }`}>
-          {mode === 'in'
-            ? (movementType === 'Replenishment' ? 'Replenishing stock into warehouse' : 'Receiving stock into warehouse')
-            : mode === 'out' ? 'Dispatching stock out of warehouse'
-            : 'Internal transfer — tracking both directions'}
-        </span>
-      </div>
-
       {/* Summary pills */}
       {lines.length > 0 && (
         <div className="flex items-stretch gap-3">

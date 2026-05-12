@@ -8,7 +8,6 @@ export const STATUS_COLORS = {
 
 export const TYPE_COLORS = {
   'Inbound': 'bg-violet-100 text-violet-700',
-  'Replenishment': 'bg-blue-100 text-blue-700',
   'Outbound': 'bg-orange-100 text-orange-700',
   'Internal': 'bg-cyan-100 text-cyan-700',
 };
