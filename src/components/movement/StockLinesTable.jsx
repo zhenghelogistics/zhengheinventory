@@ -3,103 +3,75 @@ import { Plus, Check, X, Pencil, Trash2 } from 'lucide-react';
 import { fmtDate } from '../../utils/movementHelpers';
 
 const UNITS = ['pcs', 'box', 'carton', 'pallet', 'kg', 'bag', 'roll', 'set', 'drum', 'unit'];
-const TODAY = new Date().toISOString().split('T')[0];
-
 const LINE_TYPES = ['Inbound', 'Replenishment', 'Outbound'];
 
 const LINE_TYPE_COLORS = {
-  'Inbound':      'bg-violet-100 text-violet-700',
-  'Replenishment':'bg-blue-100 text-blue-700',
-  'Outbound':     'bg-orange-100 text-orange-700',
+  'Inbound':       'bg-violet-100 text-violet-700',
+  'Replenishment': 'bg-blue-100 text-blue-700',
+  'Outbound':      'bg-orange-100 text-orange-700',
 };
 
-function dispatchStatus(date_out) {
-  if (!date_out) return 'none';
-  return date_out <= TODAY ? 'dispatched' : 'pending';
+function isOut(line_type) {
+  return line_type === 'Outbound';
 }
 
-// What columns to show based on movement type
-function getMode(movementType) {
-  if (movementType === 'Outbound') return 'out';
-  if (movementType === 'Internal') return 'both';
-  return 'in'; // Inbound or Replenishment
-}
-
-export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, onDelete }) {
+export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
   const [editId, setEditId] = useState(null);
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState(false);
 
-  const mode = getMode(movementType);
-  const showIn = mode === 'in' || mode === 'both';
-  const showOut = mode === 'out' || mode === 'both';
-  const showBalance = mode === 'both';
-
   function startEdit(line) {
-    const defaultType = line.line_type || 'Inbound';
     setEditId(line.id);
     setDraft({
-      line_type: line.line_type || defaultType,
+      line_type: line.line_type || 'Inbound',
       sku: line.sku || '',
       description: line.description || '',
       unit: line.unit || 'pcs',
       qty_actual: line.qty_actual ?? '',
-      qty_out: line.qty_out ?? '',
       date_in: line.date_in || '',
-      date_out: line.date_out || '',
       remarks: line.remarks || '',
     });
   }
 
   async function saveEdit() {
     setSaving(true);
+    const qty = parseFloat(draft.qty_actual) || 0;
     await onUpdate(editId, {
       line_type: draft.line_type,
       sku: draft.sku,
       description: draft.description,
       unit: draft.unit,
-      qty_actual: parseFloat(draft.qty_actual) || 0,
-      qty_out: parseFloat(draft.qty_out) || 0,
-      date_in: draft.date_in || null,
-      date_out: draft.date_out || null,
+      qty_actual: isOut(draft.line_type) ? 0 : qty,
+      qty_out: isOut(draft.line_type) ? qty : 0,
+      date_in: isOut(draft.line_type) ? null : (draft.date_in || null),
+      date_out: isOut(draft.line_type) ? (draft.date_in || null) : null,
       remarks: draft.remarks,
     });
     setSaving(false);
     setEditId(null);
   }
 
-  const totalIn = lines.reduce((s, l) => s + (Number(l.qty_actual) || 0), 0);
-  const totalOut = lines.reduce((s, l) => s + (Number(l.qty_out) || 0), 0);
-  const totalBalance = totalIn - totalOut;
+  // Balance: Inbound + Replenishment add, Outbound subtracts
+  const totalIn  = lines.filter((l) => !isOut(l.line_type)).reduce((s, l) => s + (Number(l.qty_actual) || 0), 0);
+  const totalOut = lines.filter((l) => isOut(l.line_type)).reduce((s, l) => s + (Number(l.qty_out) || 0), 0);
+  const balance  = totalIn - totalOut;
 
-  // Build column headers dynamically
-  const COLS = [
-    'Event', 'SKU', 'Description', 'Unit',
-    ...(showIn ? ['Qty In'] : []),
-    ...(showOut ? ['Qty Out'] : []),
-    ...(showBalance ? ['Balance'] : []),
-    ...(showIn ? ['Date In'] : []),
-    ...(showOut ? ['Date Out'] : []),
-    ...(showOut ? ['Status'] : []),
-    'Remarks', '',
-  ];
+  const COLS = ['Event', 'SKU', 'Description', 'Unit', 'Qty', 'Date', 'Remarks', ''];
 
   return (
     <div className="space-y-3">
       {/* Summary pills */}
       {lines.length > 0 && (
         <div className="flex items-stretch gap-3">
-          {showIn && <SummaryPill label="Total In" value={totalIn} color="text-violet-700 bg-violet-50 border-violet-200" />}
-          {showOut && <SummaryPill label="Total Out" value={totalOut} color="text-orange-600 bg-orange-50 border-orange-200" />}
-          {showBalance && (
-            <SummaryPill
-              label="Balance"
-              value={totalBalance}
-              sub={totalBalance < 0 ? 'over-dispatched' : totalBalance === 0 ? 'fully out' : 'remaining'}
-              color={totalBalance > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : totalBalance === 0 ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-red-600 bg-red-50 border-red-200'}
-              bold
-            />
-          )}
+          <SummaryPill label="Total In"  value={`+${totalIn}`}  color="text-violet-700 bg-violet-50 border-violet-200" />
+          <SummaryPill label="Total Out" value={`-${totalOut}`} color="text-orange-600 bg-orange-50 border-orange-200" />
+          <SummaryPill
+            label="Balance"
+            value={balance}
+            sub={balance < 0 ? 'over-dispatched' : balance === 0 ? 'fully out' : 'remaining'}
+            color={balance > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : balance === 0 ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-red-600 bg-red-50 border-red-200'}
+            bold
+          />
         </div>
       )}
 
@@ -121,8 +93,9 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
               </tr>
             )}
             {lines.map((line) => {
-              const status = dispatchStatus(line.date_out);
-              const lineBalance = (Number(line.qty_actual) || 0) - (Number(line.qty_out) || 0);
+              const out = isOut(line.line_type);
+              const qty = out ? (Number(line.qty_out) || 0) : (Number(line.qty_actual) || 0);
+              const date = out ? line.date_out : line.date_in;
               return editId === line.id ? (
                 <tr key={line.id} className="bg-blue-50/60 border-b border-blue-100">
                   <td className="px-2 py-1.5">
@@ -137,18 +110,8 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
                       {UNITS.map((u) => <option key={u}>{u}</option>)}
                     </select>
                   </td>
-                  {showIn && <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_actual} onChange={(e) => setDraft((p) => ({ ...p, qty_actual: e.target.value }))} placeholder="0" /></td>}
-                  {showOut && <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_out} onChange={(e) => setDraft((p) => ({ ...p, qty_out: e.target.value }))} placeholder="0" /></td>}
-                  {showBalance && (
-                    <td className="px-2 py-1.5 text-center">
-                      <span className={`font-bold tabular-nums text-xs ${(parseFloat(draft.qty_actual)||0)-(parseFloat(draft.qty_out)||0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {(parseFloat(draft.qty_actual)||0)-(parseFloat(draft.qty_out)||0)}
-                      </span>
-                    </td>
-                  )}
-                  {showIn && <td className="px-2 py-1.5"><input type="date" className={inp} value={draft.date_in} onChange={(e) => setDraft((p) => ({ ...p, date_in: e.target.value }))} /></td>}
-                  {showOut && <td className="px-2 py-1.5"><input type="date" className={inp} value={draft.date_out} onChange={(e) => setDraft((p) => ({ ...p, date_out: e.target.value }))} /></td>}
-                  {showOut && <td className="px-2 py-1.5 text-slate-300 text-[10px]">—</td>}
+                  <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_actual} onChange={(e) => setDraft((p) => ({ ...p, qty_actual: e.target.value }))} placeholder="0" /></td>
+                  <td className="px-2 py-1.5"><input type="date" className={inp} value={draft.date_in} onChange={(e) => setDraft((p) => ({ ...p, date_in: e.target.value }))} /></td>
                   <td className="px-2 py-1.5"><input className={inp} value={draft.remarks} onChange={(e) => setDraft((p) => ({ ...p, remarks: e.target.value }))} placeholder="Remarks" /></td>
                   <td className="px-2 py-1.5">
                     <div className="flex gap-1">
@@ -158,38 +121,21 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
                   </td>
                 </tr>
               ) : (
-                <tr
-                  key={line.id}
-                  className={`border-b border-slate-100 hover:bg-slate-50 group transition-colors ${status === 'dispatched' && lineBalance === 0 ? 'opacity-50' : ''}`}
-                  onDoubleClick={() => startEdit(line)}
-                >
+                <tr key={line.id} className="border-b border-slate-100 hover:bg-slate-50 group transition-colors" onDoubleClick={() => startEdit(line)}>
                   <td className="px-3 py-2.5">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${LINE_TYPE_COLORS[line.line_type] || 'bg-slate-100 text-slate-600'}`}>
-                      {line.line_type || 'Delivery'}
+                      {line.line_type || 'Inbound'}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 font-mono text-slate-700">{line.sku || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-700 max-w-[180px] truncate">{line.description || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-500">{line.unit || '—'}</td>
-                  {showIn && <td className="px-3 py-2.5 tabular-nums text-slate-700 font-medium">{line.qty_actual ?? 0}</td>}
-                  {showOut && <td className="px-3 py-2.5 tabular-nums text-orange-600 font-medium">{line.qty_out ?? 0}</td>}
-                  {showBalance && (
-                    <td className="px-3 py-2.5">
-                      <span className={`tabular-nums font-bold text-xs px-2 py-0.5 rounded-full ${
-                        lineBalance > 0 ? 'bg-emerald-100 text-emerald-700' :
-                        lineBalance === 0 ? 'bg-slate-100 text-slate-500' :
-                        'bg-red-100 text-red-600'
-                      }`}>{lineBalance}</span>
-                    </td>
-                  )}
-                  {showIn && <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(line.date_in)}</td>}
-                  {showOut && <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(line.date_out)}</td>}
-                  {showOut && (
-                    <td className="px-3 py-2.5">
-                      {status === 'dispatched' && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">Dispatched</span>}
-                      {status === 'pending' && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Pending</span>}
-                    </td>
-                  )}
+                  <td className="px-3 py-2.5 tabular-nums font-bold">
+                    <span className={out ? 'text-orange-600' : 'text-violet-700'}>
+                      {out ? `-${qty}` : `+${qty}`}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(date)}</td>
                   <td className="px-3 py-2.5 text-slate-400 max-w-[100px] truncate">{line.remarks || '—'}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -204,29 +150,18 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
           {lines.length > 0 && (
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
-                <td colSpan={4} className="px-3 py-2.5 text-right text-xs text-slate-500">Totals</td>
-                {showIn && <td className="px-3 py-2.5 tabular-nums text-slate-700">{totalIn}</td>}
-                {showOut && <td className="px-3 py-2.5 tabular-nums text-orange-600">{totalOut}</td>}
-                {showBalance && (
-                  <td className="px-3 py-2.5">
-                    <span className={`tabular-nums font-bold text-xs px-2 py-0.5 rounded-full ${
-                      totalBalance > 0 ? 'bg-emerald-100 text-emerald-700' :
-                      totalBalance === 0 ? 'bg-slate-100 text-slate-500' :
-                      'bg-red-100 text-red-600'
-                    }`}>{totalBalance}</span>
-                  </td>
-                )}
-                <td colSpan={COLS.length - 3 - (showIn?1:0) - (showOut?1:0) - (showBalance?1:0)} />
+                <td colSpan={4} className="px-3 py-2.5 text-right text-xs text-slate-500">Balance</td>
+                <td className={`px-3 py-2.5 tabular-nums font-bold ${balance > 0 ? 'text-emerald-600' : balance === 0 ? 'text-slate-400' : 'text-red-500'}`}>
+                  {balance}
+                </td>
+                <td colSpan={3} />
               </tr>
             </tfoot>
           )}
         </table>
       </div>
 
-      <button
-        onClick={onAdd}
-        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-      >
+      <button onClick={onAdd} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer">
         <Plus size={13} strokeWidth={2.5} />
         Add Row
       </button>
