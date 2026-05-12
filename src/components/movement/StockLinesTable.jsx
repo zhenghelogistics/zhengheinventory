@@ -1,8 +1,15 @@
 import { useState } from 'react';
-import { Plus, Check, X, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Check, X, Pencil, Trash2, ArrowDown, ArrowUp, Scale } from 'lucide-react';
 import { fmtDate } from '../../utils/movementHelpers';
 
 const UNITS = ['pcs', 'box', 'carton', 'pallet', 'kg', 'bag', 'roll', 'set', 'drum', 'unit'];
+
+const TODAY = new Date().toISOString().split('T')[0];
+
+function dispatchStatus(date_out) {
+  if (!date_out) return 'none';
+  return date_out <= TODAY ? 'dispatched' : 'pending';
+}
 
 export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
   const [editId, setEditId] = useState(null);
@@ -39,13 +46,55 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
     setEditId(null);
   }
 
-  const totalOrdered = lines.reduce((s, l) => s + (Number(l.qty_ordered) || 0), 0);
-  const totalActual = lines.reduce((s, l) => s + (Number(l.qty_actual) || 0), 0);
+  // Balance computation
+  const totalIn = lines.reduce((s, l) => s + (Number(l.qty_actual) || 0), 0);
+  const dispatched = lines
+    .filter((l) => dispatchStatus(l.date_out) === 'dispatched')
+    .reduce((s, l) => s + (Number(l.qty_actual) || 0), 0);
+  const pending = lines
+    .filter((l) => dispatchStatus(l.date_out) === 'pending')
+    .reduce((s, l) => s + (Number(l.qty_actual) || 0), 0);
+  const balance = totalIn - dispatched;
 
-  const COLS = ['SKU', 'Description', 'Unit', 'Qty Ordered', 'Qty Actual', 'Date In', 'Date Out', 'Remarks', ''];
+  const COLS = ['SKU', 'Description', 'Unit', 'Qty Ordered', 'Qty Actual', 'Date In', 'Date Out', 'Status', 'Remarks', ''];
 
   return (
-    <div>
+    <div className="space-y-3">
+      {/* Balance Summary */}
+      {lines.length > 0 && (
+        <div className="grid grid-cols-4 gap-3">
+          <BalanceCard
+            label="Total Received"
+            value={totalIn}
+            icon={<ArrowDown size={13} className="text-violet-600" />}
+            color="bg-violet-50 border-violet-200 text-violet-700"
+          />
+          <BalanceCard
+            label="Dispatched"
+            value={dispatched}
+            sub="date passed"
+            icon={<ArrowUp size={13} className="text-orange-500" />}
+            color="bg-orange-50 border-orange-200 text-orange-600"
+          />
+          <BalanceCard
+            label="Pending Dispatch"
+            value={pending}
+            sub="future date"
+            icon={<ArrowUp size={13} className="text-amber-500" />}
+            color="bg-amber-50 border-amber-200 text-amber-600"
+          />
+          <BalanceCard
+            label="Balance Remaining"
+            value={balance}
+            sub={balance < 0 ? 'over-dispatched!' : balance === 0 ? 'fully dispatched' : 'in stock'}
+            icon={<Scale size={13} className={balance > 0 ? 'text-emerald-600' : balance === 0 ? 'text-slate-500' : 'text-red-500'} />}
+            color={balance > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : balance === 0 ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-red-50 border-red-200 text-red-600'}
+            highlight
+          />
+        </div>
+      )}
+
+      {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-xs">
           <thead>
@@ -63,8 +112,9 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                 </td>
               </tr>
             )}
-            {lines.map((line) =>
-              editId === line.id ? (
+            {lines.map((line) => {
+              const status = dispatchStatus(line.date_out);
+              return editId === line.id ? (
                 <tr key={line.id} className="bg-blue-50/60 border-b border-blue-100">
                   <td className="px-2 py-1.5">
                     <input className={inp} value={draft.sku} onChange={(e) => setDraft((p) => ({ ...p, sku: e.target.value }))} placeholder="SKU" />
@@ -89,6 +139,7 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                   <td className="px-2 py-1.5">
                     <input type="date" className={inp} value={draft.date_out} onChange={(e) => setDraft((p) => ({ ...p, date_out: e.target.value }))} />
                   </td>
+                  <td className="px-2 py-1.5 text-slate-400 text-[10px]">—</td>
                   <td className="px-2 py-1.5">
                     <input className={inp} value={draft.remarks} onChange={(e) => setDraft((p) => ({ ...p, remarks: e.target.value }))} placeholder="Remarks" />
                   </td>
@@ -104,14 +155,28 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                   </td>
                 </tr>
               ) : (
-                <tr key={line.id} className="border-b border-slate-100 hover:bg-slate-50 group" onDoubleClick={() => startEdit(line)}>
+                <tr
+                  key={line.id}
+                  className={`border-b border-slate-100 hover:bg-slate-50 group transition-colors ${status === 'dispatched' ? 'opacity-60' : ''}`}
+                  onDoubleClick={() => startEdit(line)}
+                >
                   <td className="px-3 py-2.5 font-mono text-slate-700">{line.sku || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-700 max-w-[200px] truncate">{line.description || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-500">{line.unit || '—'}</td>
                   <td className="px-3 py-2.5 tabular-nums text-slate-600">{line.qty_ordered ?? 0}</td>
-                  <td className="px-3 py-2.5 tabular-nums font-semibold text-slate-800">{line.qty_actual ?? 0}</td>
+                  <td className={`px-3 py-2.5 tabular-nums font-semibold ${status === 'dispatched' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                    {line.qty_actual ?? 0}
+                  </td>
                   <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(line.date_in)}</td>
                   <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(line.date_out)}</td>
+                  <td className="px-3 py-2.5">
+                    {status === 'dispatched' && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">Dispatched</span>
+                    )}
+                    {status === 'pending' && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Pending</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5 text-slate-500 max-w-[120px] truncate">{line.remarks || '—'}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -124,28 +189,46 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                     </div>
                   </td>
                 </tr>
-              )
-            )}
+              );
+            })}
           </tbody>
           {lines.length > 0 && (
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200">
                 <td colSpan={3} className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Total Qty</td>
-                <td className="px-3 py-2 tabular-nums font-bold text-slate-700">{totalOrdered}</td>
-                <td className="px-3 py-2 tabular-nums font-bold text-slate-800">{totalActual}</td>
-                <td colSpan={4} />
+                <td className="px-3 py-2 tabular-nums font-bold text-slate-700">
+                  {lines.reduce((s, l) => s + (Number(l.qty_ordered) || 0), 0)}
+                </td>
+                <td className="px-3 py-2 tabular-nums font-bold text-slate-800">
+                  {lines.reduce((s, l) => s + (Number(l.qty_actual) || 0), 0)}
+                </td>
+                <td colSpan={5} />
               </tr>
             </tfoot>
           )}
         </table>
       </div>
+
       <button
         onClick={onAdd}
-        className="mt-2 flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
       >
         <Plus size={13} strokeWidth={2.5} />
         Add Row
       </button>
+    </div>
+  );
+}
+
+function BalanceCard({ label, value, sub, icon, color, highlight }) {
+  return (
+    <div className={`rounded-lg border px-4 py-3 flex items-center justify-between ${color} ${highlight ? 'ring-1 ring-current ring-opacity-30' : ''}`}>
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide opacity-70 mb-1">{label}</div>
+        <div className="text-xl font-bold tabular-nums">{value}</div>
+        {sub && <div className="text-[10px] opacity-60 mt-0.5">{sub}</div>}
+      </div>
+      <div className="opacity-60">{icon}</div>
     </div>
   );
 }
