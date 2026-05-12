@@ -2,7 +2,6 @@ import { Routes, Route, NavLink } from 'react-router-dom';
 import InventoryPage from './pages/InventoryPage';
 import MovementListPage from './pages/MovementListPage';
 import MovementDetailPage from './pages/MovementDetailPage';
-import StockLedgerPage from './pages/StockLedgerPage';
 
 const NAV = [
   {
@@ -27,17 +26,6 @@ const NAV = [
         <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
         <circle cx="5.5" cy="18.5" r="2.5"/>
         <circle cx="18.5" cy="18.5" r="2.5"/>
-      </svg>
-    ),
-  },
-  {
-    to: '/ledger',
-    end: true,
-    label: 'Stock Ledger',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-        <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
       </svg>
     ),
   },
@@ -84,7 +72,6 @@ export default function App() {
           <Route path="/" element={<InventoryPage />} />
           <Route path="/movements" element={<MovementListPage />} />
           <Route path="/movements/:id" element={<MovementDetailPage />} />
-          <Route path="/ledger" element={<StockLedgerPage />} />
         </Routes>
       </main>
     </div>
