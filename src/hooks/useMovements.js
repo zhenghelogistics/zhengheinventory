@@ -10,7 +10,7 @@ export function useMovements() {
     setLoading(true);
     const { data, error } = await supabase
       .from('movements')
-      .select(`*, cost_lines(amount_sgd), stock_lines(sku, description, qty_actual, qty_out, date_in, date_out, unit)`)
+      .select(`*, cost_lines(amount_sgd), stock_lines(sku, description, qty_actual, qty_out, date_in, date_out, unit, line_type)`)
       .order('created_at', { ascending: false });
     if (error) { setError(error.message); setLoading(false); return; }
     setMovements(data || []);
@@ -23,7 +23,7 @@ export function useMovements() {
     const { data, error } = await supabase
       .from('movements')
       .insert({ type })
-      .select(`*, cost_lines(amount_sgd), stock_lines(sku, description, qty_actual, qty_out, date_in, date_out, unit)`)
+      .select(`*, cost_lines(amount_sgd), stock_lines(sku, description, qty_actual, qty_out, date_in, date_out, unit, line_type)`)
       .single();
     if (error) { setError(error.message); return null; }
     setMovements((prev) => [data, ...prev]);

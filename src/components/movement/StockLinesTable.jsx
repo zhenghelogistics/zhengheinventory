@@ -5,6 +5,20 @@ import { fmtDate } from '../../utils/movementHelpers';
 const UNITS = ['pcs', 'box', 'carton', 'pallet', 'kg', 'bag', 'roll', 'set', 'drum', 'unit'];
 const TODAY = new Date().toISOString().split('T')[0];
 
+const LINE_TYPES = {
+  in:   ['Delivery', 'Replenishment', 'Return', 'Adjustment'],
+  out:  ['Dispatch', 'Return', 'Adjustment'],
+  both: ['Delivery', 'Replenishment', 'Dispatch', 'Return', 'Adjustment'],
+};
+
+const LINE_TYPE_COLORS = {
+  'Delivery':     'bg-violet-100 text-violet-700',
+  'Replenishment':'bg-blue-100 text-blue-700',
+  'Dispatch':     'bg-orange-100 text-orange-700',
+  'Return':       'bg-amber-100 text-amber-700',
+  'Adjustment':   'bg-slate-100 text-slate-600',
+};
+
 function dispatchStatus(date_out) {
   if (!date_out) return 'none';
   return date_out <= TODAY ? 'dispatched' : 'pending';
@@ -28,8 +42,10 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
   const showBalance = mode === 'both';
 
   function startEdit(line) {
+    const defaultType = mode === 'out' ? 'Dispatch' : 'Delivery';
     setEditId(line.id);
     setDraft({
+      line_type: line.line_type || defaultType,
       sku: line.sku || '',
       description: line.description || '',
       unit: line.unit || 'pcs',
@@ -44,6 +60,7 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
   async function saveEdit() {
     setSaving(true);
     await onUpdate(editId, {
+      line_type: draft.line_type,
       sku: draft.sku,
       description: draft.description,
       unit: draft.unit,
@@ -63,7 +80,7 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
 
   // Build column headers dynamically
   const COLS = [
-    'SKU', 'Description', 'Unit',
+    'Event', 'SKU', 'Description', 'Unit',
     ...(showIn ? ['Qty In'] : []),
     ...(showOut ? ['Qty Out'] : []),
     ...(showBalance ? ['Balance'] : []),
@@ -114,6 +131,11 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
               const lineBalance = (Number(line.qty_actual) || 0) - (Number(line.qty_out) || 0);
               return editId === line.id ? (
                 <tr key={line.id} className="bg-blue-50/60 border-b border-blue-100">
+                  <td className="px-2 py-1.5">
+                    <select className={inp} value={draft.line_type} onChange={(e) => setDraft((p) => ({ ...p, line_type: e.target.value }))}>
+                      {(LINE_TYPES[mode] || LINE_TYPES.both).map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                  </td>
                   <td className="px-2 py-1.5"><input className={inp} value={draft.sku} onChange={(e) => setDraft((p) => ({ ...p, sku: e.target.value }))} placeholder="SKU" /></td>
                   <td className="px-2 py-1.5"><input className={inp + ' min-w-[140px]'} value={draft.description} onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))} placeholder="Description" /></td>
                   <td className="px-2 py-1.5">
@@ -147,6 +169,11 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
                   className={`border-b border-slate-100 hover:bg-slate-50 group transition-colors ${status === 'dispatched' && lineBalance === 0 ? 'opacity-50' : ''}`}
                   onDoubleClick={() => startEdit(line)}
                 >
+                  <td className="px-3 py-2.5">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${LINE_TYPE_COLORS[line.line_type] || 'bg-slate-100 text-slate-600'}`}>
+                      {line.line_type || 'Delivery'}
+                    </span>
+                  </td>
                   <td className="px-3 py-2.5 font-mono text-slate-700">{line.sku || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-700 max-w-[180px] truncate">{line.description || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-500">{line.unit || '—'}</td>
@@ -183,7 +210,7 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
           {lines.length > 0 && (
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
-                <td colSpan={3} className="px-3 py-2.5 text-right text-xs text-slate-500">Totals</td>
+                <td colSpan={4} className="px-3 py-2.5 text-right text-xs text-slate-500">Totals</td>
                 {showIn && <td className="px-3 py-2.5 tabular-nums text-slate-700">{totalIn}</td>}
                 {showOut && <td className="px-3 py-2.5 tabular-nums text-orange-600">{totalOut}</td>}
                 {showBalance && (

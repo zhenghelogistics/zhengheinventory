@@ -72,6 +72,7 @@ export default function MovementListPage() {
           sku: line.sku || '—',
           description: line.description || '—',
           unit: line.unit || '',
+          lineType: line.line_type || '',
           qtyIn: INBOUND_TYPES.has(m.type) ? (Number(line.qty_actual) || 0) : 0,
           qtyOut: m.type === 'Outbound' ? (Number(line.qty_actual) || 0) : (Number(line.qty_out) || 0),
         });
@@ -300,7 +301,7 @@ export default function MovementListPage() {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-slate-100">
-                            {['Movement', 'Type', 'Date In', 'Date Out', 'Qty In', 'Qty Out', 'Running Balance', ''].map((h) => (
+                            {['Movement', 'Type', 'Event', 'Date In', 'Date Out', 'Qty In', 'Qty Out', 'Running Balance', ''].map((h) => (
                               <th key={h} className="pb-2 text-left font-semibold text-slate-400 pr-4 last:pr-0">{h}</th>
                             ))}
                           </tr>
@@ -310,6 +311,7 @@ export default function MovementListPage() {
                             <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                               <td className="py-2 pr-4 font-mono font-semibold text-blue-600">{r.movementNo}</td>
                               <td className="py-2 pr-4"><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${TYPE_COLORS[r.movementType] || 'bg-slate-100 text-slate-600'}`}>{r.movementType}</span></td>
+                              <td className="py-2 pr-4"><span className="text-[10px] font-medium text-slate-500">{r.lineType || '—'}</span></td>
                               <td className="py-2 pr-4 text-slate-500">{fmtDate(r.dateIn)}</td>
                               <td className="py-2 pr-4 text-slate-500">{fmtDate(r.dateOut)}</td>
                               <td className="py-2 pr-4 tabular-nums text-violet-600 font-medium">{r.qtyIn > 0 ? `+${r.qtyIn}` : '—'}</td>
