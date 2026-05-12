@@ -10,10 +10,22 @@ function dispatchStatus(date_out) {
   return date_out <= TODAY ? 'dispatched' : 'pending';
 }
 
-export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
+// What columns to show based on movement type
+function getMode(movementType) {
+  if (movementType === 'Outbound') return 'out';
+  if (movementType === 'Internal') return 'both';
+  return 'in'; // Inbound or Replenishment
+}
+
+export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, onDelete }) {
   const [editId, setEditId] = useState(null);
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState(false);
+
+  const mode = getMode(movementType);
+  const showIn = mode === 'in' || mode === 'both';
+  const showOut = mode === 'out' || mode === 'both';
+  const showBalance = mode === 'both';
 
   function startEdit(line) {
     setEditId(line.id);
@@ -45,27 +57,52 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
     setEditId(null);
   }
 
-  // Totals across all lines
   const totalIn = lines.reduce((s, l) => s + (Number(l.qty_actual) || 0), 0);
   const totalOut = lines.reduce((s, l) => s + (Number(l.qty_out) || 0), 0);
   const totalBalance = totalIn - totalOut;
 
-  const COLS = ['SKU', 'Description', 'Unit', 'Qty In', 'Qty Out', 'Balance', 'Date In', 'Date Out', 'Status', 'Remarks', ''];
+  // Build column headers dynamically
+  const COLS = [
+    'SKU', 'Description', 'Unit',
+    ...(showIn ? ['Qty In'] : []),
+    ...(showOut ? ['Qty Out'] : []),
+    ...(showBalance ? ['Balance'] : []),
+    ...(showIn ? ['Date In'] : []),
+    ...(showOut ? ['Date Out'] : []),
+    ...(showOut ? ['Status'] : []),
+    'Remarks', '',
+  ];
 
   return (
     <div className="space-y-3">
-      {/* Balance summary */}
+      {/* Mode label */}
+      <div className="flex items-center gap-2">
+        <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${
+          mode === 'in' ? 'bg-violet-100 text-violet-700' :
+          mode === 'out' ? 'bg-orange-100 text-orange-700' :
+          'bg-cyan-100 text-cyan-700'
+        }`}>
+          {mode === 'in'
+            ? (movementType === 'Replenishment' ? 'Replenishing stock into warehouse' : 'Receiving stock into warehouse')
+            : mode === 'out' ? 'Dispatching stock out of warehouse'
+            : 'Internal transfer — tracking both directions'}
+        </span>
+      </div>
+
+      {/* Summary pills */}
       {lines.length > 0 && (
         <div className="flex items-stretch gap-3">
-          <SummaryPill label="Total In" value={totalIn} color="text-violet-700 bg-violet-50 border-violet-200" />
-          <SummaryPill label="Total Out" value={totalOut} color="text-orange-600 bg-orange-50 border-orange-200" />
-          <SummaryPill
-            label="Balance"
-            value={totalBalance}
-            color={totalBalance > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : totalBalance === 0 ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-red-600 bg-red-50 border-red-200'}
-            sub={totalBalance < 0 ? 'over-dispatched' : totalBalance === 0 ? 'fully out' : 'remaining'}
-            bold
-          />
+          {showIn && <SummaryPill label="Total In" value={totalIn} color="text-violet-700 bg-violet-50 border-violet-200" />}
+          {showOut && <SummaryPill label="Total Out" value={totalOut} color="text-orange-600 bg-orange-50 border-orange-200" />}
+          {showBalance && (
+            <SummaryPill
+              label="Balance"
+              value={totalBalance}
+              sub={totalBalance < 0 ? 'over-dispatched' : totalBalance === 0 ? 'fully out' : 'remaining'}
+              color={totalBalance > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : totalBalance === 0 ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-red-600 bg-red-50 border-red-200'}
+              bold
+            />
+          )}
         </div>
       )}
 
@@ -98,16 +135,18 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                       {UNITS.map((u) => <option key={u}>{u}</option>)}
                     </select>
                   </td>
-                  <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_actual} onChange={(e) => setDraft((p) => ({ ...p, qty_actual: e.target.value }))} placeholder="0" /></td>
-                  <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_out} onChange={(e) => setDraft((p) => ({ ...p, qty_out: e.target.value }))} placeholder="0" /></td>
-                  <td className="px-2 py-1.5 text-center">
-                    <span className={`font-bold tabular-nums text-xs ${(parseFloat(draft.qty_actual)||0)-(parseFloat(draft.qty_out)||0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {(parseFloat(draft.qty_actual)||0)-(parseFloat(draft.qty_out)||0)}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1.5"><input type="date" className={inp} value={draft.date_in} onChange={(e) => setDraft((p) => ({ ...p, date_in: e.target.value }))} /></td>
-                  <td className="px-2 py-1.5"><input type="date" className={inp} value={draft.date_out} onChange={(e) => setDraft((p) => ({ ...p, date_out: e.target.value }))} /></td>
-                  <td className="px-2 py-1.5 text-slate-300 text-[10px]">—</td>
+                  {showIn && <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_actual} onChange={(e) => setDraft((p) => ({ ...p, qty_actual: e.target.value }))} placeholder="0" /></td>}
+                  {showOut && <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_out} onChange={(e) => setDraft((p) => ({ ...p, qty_out: e.target.value }))} placeholder="0" /></td>}
+                  {showBalance && (
+                    <td className="px-2 py-1.5 text-center">
+                      <span className={`font-bold tabular-nums text-xs ${(parseFloat(draft.qty_actual)||0)-(parseFloat(draft.qty_out)||0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {(parseFloat(draft.qty_actual)||0)-(parseFloat(draft.qty_out)||0)}
+                      </span>
+                    </td>
+                  )}
+                  {showIn && <td className="px-2 py-1.5"><input type="date" className={inp} value={draft.date_in} onChange={(e) => setDraft((p) => ({ ...p, date_in: e.target.value }))} /></td>}
+                  {showOut && <td className="px-2 py-1.5"><input type="date" className={inp} value={draft.date_out} onChange={(e) => setDraft((p) => ({ ...p, date_out: e.target.value }))} /></td>}
+                  {showOut && <td className="px-2 py-1.5 text-slate-300 text-[10px]">—</td>}
                   <td className="px-2 py-1.5"><input className={inp} value={draft.remarks} onChange={(e) => setDraft((p) => ({ ...p, remarks: e.target.value }))} placeholder="Remarks" /></td>
                   <td className="px-2 py-1.5">
                     <div className="flex gap-1">
@@ -125,27 +164,25 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                   <td className="px-3 py-2.5 font-mono text-slate-700">{line.sku || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-700 max-w-[180px] truncate">{line.description || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-500">{line.unit || '—'}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-slate-700 font-medium">{line.qty_actual ?? 0}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-orange-600 font-medium">{line.qty_out ?? 0}</td>
-                  <td className="px-3 py-2.5">
-                    <span className={`tabular-nums font-bold text-xs px-2 py-0.5 rounded-full ${
-                      lineBalance > 0 ? 'bg-emerald-100 text-emerald-700' :
-                      lineBalance === 0 ? 'bg-slate-100 text-slate-500' :
-                      'bg-red-100 text-red-600'
-                    }`}>
-                      {lineBalance}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(line.date_in)}</td>
-                  <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(line.date_out)}</td>
-                  <td className="px-3 py-2.5">
-                    {status === 'dispatched' && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">Dispatched</span>
-                    )}
-                    {status === 'pending' && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Pending</span>
-                    )}
-                  </td>
+                  {showIn && <td className="px-3 py-2.5 tabular-nums text-slate-700 font-medium">{line.qty_actual ?? 0}</td>}
+                  {showOut && <td className="px-3 py-2.5 tabular-nums text-orange-600 font-medium">{line.qty_out ?? 0}</td>}
+                  {showBalance && (
+                    <td className="px-3 py-2.5">
+                      <span className={`tabular-nums font-bold text-xs px-2 py-0.5 rounded-full ${
+                        lineBalance > 0 ? 'bg-emerald-100 text-emerald-700' :
+                        lineBalance === 0 ? 'bg-slate-100 text-slate-500' :
+                        'bg-red-100 text-red-600'
+                      }`}>{lineBalance}</span>
+                    </td>
+                  )}
+                  {showIn && <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(line.date_in)}</td>}
+                  {showOut && <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(line.date_out)}</td>}
+                  {showOut && (
+                    <td className="px-3 py-2.5">
+                      {status === 'dispatched' && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">Dispatched</span>}
+                      {status === 'pending' && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Pending</span>}
+                    </td>
+                  )}
                   <td className="px-3 py-2.5 text-slate-400 max-w-[100px] truncate">{line.remarks || '—'}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -161,16 +198,18 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
                 <td colSpan={3} className="px-3 py-2.5 text-right text-xs text-slate-500">Totals</td>
-                <td className="px-3 py-2.5 tabular-nums text-slate-700">{totalIn}</td>
-                <td className="px-3 py-2.5 tabular-nums text-orange-600">{totalOut}</td>
-                <td className="px-3 py-2.5">
-                  <span className={`tabular-nums font-bold text-xs px-2 py-0.5 rounded-full ${
-                    totalBalance > 0 ? 'bg-emerald-100 text-emerald-700' :
-                    totalBalance === 0 ? 'bg-slate-100 text-slate-500' :
-                    'bg-red-100 text-red-600'
-                  }`}>{totalBalance}</span>
-                </td>
-                <td colSpan={5} />
+                {showIn && <td className="px-3 py-2.5 tabular-nums text-slate-700">{totalIn}</td>}
+                {showOut && <td className="px-3 py-2.5 tabular-nums text-orange-600">{totalOut}</td>}
+                {showBalance && (
+                  <td className="px-3 py-2.5">
+                    <span className={`tabular-nums font-bold text-xs px-2 py-0.5 rounded-full ${
+                      totalBalance > 0 ? 'bg-emerald-100 text-emerald-700' :
+                      totalBalance === 0 ? 'bg-slate-100 text-slate-500' :
+                      'bg-red-100 text-red-600'
+                    }`}>{totalBalance}</span>
+                  </td>
+                )}
+                <td colSpan={COLS.length - 3 - (showIn?1:0) - (showOut?1:0) - (showBalance?1:0)} />
               </tr>
             </tfoot>
           )}

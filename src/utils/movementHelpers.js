@@ -8,10 +8,9 @@ export const STATUS_COLORS = {
 
 export const TYPE_COLORS = {
   'Inbound': 'bg-violet-100 text-violet-700',
+  'Replenishment': 'bg-blue-100 text-blue-700',
   'Outbound': 'bg-orange-100 text-orange-700',
   'Internal': 'bg-cyan-100 text-cyan-700',
-  'Transfer': 'bg-cyan-100 text-cyan-700',
-  'Adjustment': 'bg-pink-100 text-pink-700',
 };
 
 export const STATUSES = ['New', 'In Progress', 'Completed', 'On Hold', 'Voided'];

@@ -6,7 +6,7 @@ import { fmt, fmtDate, STATUS_COLORS, TYPE_COLORS, calcMovementTotals } from '..
 import { exportMovementsExcel } from '../utils/excelExport';
 import ConfirmDialog from '../components/ConfirmDialog';
 
-const TYPES = ['All Types', 'Inbound', 'Outbound', 'Internal'];
+const TYPES = ['All Types', 'Inbound', 'Replenishment', 'Outbound', 'Internal'];
 const STATUSES = ['All Statuses', 'New', 'In Progress', 'Completed', 'Voided'];
 
 export default function MovementListPage() {
@@ -88,7 +88,7 @@ export default function MovementListPage() {
             </button>
             {dropdownOpen && (
               <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-20">
-                {['Inbound', 'Outbound', 'Internal'].map((t) => (
+                {['Inbound', 'Replenishment', 'Outbound', 'Internal'].map((t) => (
                   <button
                     key={t}
                     onClick={() => { setDropdownOpen(false); handleCreate(t); }}

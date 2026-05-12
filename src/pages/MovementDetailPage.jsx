@@ -201,7 +201,7 @@ export default function MovementDetailPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Field label="Type">
                 <select className={sel} value={form.type} onChange={(e) => set('type', e.target.value)}>
-                  {['Inbound', 'Outbound', 'Internal'].map((t) => <option key={t}>{t}</option>)}
+                  {['Inbound', 'Replenishment', 'Outbound', 'Internal'].map((t) => <option key={t}>{t}</option>)}
                 </select>
               </Field>
               <Field label="Status">
@@ -306,10 +306,11 @@ export default function MovementDetailPage() {
           <Section title="Stock Lines">
             <StockLinesTable
               lines={stockLines}
+              movementType={form.type}
               onAdd={addStockLine}
               onUpdate={updateStockLine}
               onDelete={deleteStockLine}
-              />
+            />
           </Section>
 
           {/* Release Orders */}
