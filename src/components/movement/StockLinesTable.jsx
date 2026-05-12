@@ -6,17 +6,15 @@ const UNITS = ['pcs', 'box', 'carton', 'pallet', 'kg', 'bag', 'roll', 'set', 'dr
 const TODAY = new Date().toISOString().split('T')[0];
 
 const LINE_TYPES = {
-  in:   ['Delivery', 'Replenishment', 'Return', 'Adjustment'],
-  out:  ['Dispatch', 'Return', 'Adjustment'],
-  both: ['Delivery', 'Replenishment', 'Dispatch', 'Return', 'Adjustment'],
+  in:   ['Inbound', 'Replenishment'],
+  out:  ['Outbound'],
+  both: ['Inbound', 'Replenishment', 'Outbound'],
 };
 
 const LINE_TYPE_COLORS = {
-  'Delivery':     'bg-violet-100 text-violet-700',
+  'Inbound':      'bg-violet-100 text-violet-700',
   'Replenishment':'bg-blue-100 text-blue-700',
-  'Dispatch':     'bg-orange-100 text-orange-700',
-  'Return':       'bg-amber-100 text-amber-700',
-  'Adjustment':   'bg-slate-100 text-slate-600',
+  'Outbound':     'bg-orange-100 text-orange-700',
 };
 
 function dispatchStatus(date_out) {
@@ -42,7 +40,7 @@ export default function StockLinesTable({ lines, movementType, onAdd, onUpdate, 
   const showBalance = mode === 'both';
 
   function startEdit(line) {
-    const defaultType = mode === 'out' ? 'Dispatch' : 'Delivery';
+    const defaultType = mode === 'out' ? 'Outbound' : (line.line_type || 'Inbound');
     setEditId(line.id);
     setDraft({
       line_type: line.line_type || defaultType,
