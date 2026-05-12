@@ -239,3 +239,120 @@ export function exportInternalReport(movement, costLines, stockLines) {
   signatureFooter(doc, 'Prepared by', movement.salesperson, doc.internal.pageSize.height);
   doc.save(`Report-${movement.movement_no.replace('/', '-')}.pdf`);
 }
+
+// ── Release Order ─────────────────────────────────────────────────────────────
+export function exportReleaseOrder(movement, releaseOrder) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const pageH = doc.internal.pageSize.height;
+
+  // Header bar
+  doc.setFillColor(...PRIMARY);
+  doc.rect(0, 0, W, 18, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text(BRAND, 10, 12);
+  doc.setFontSize(10);
+  doc.text('RELEASE ORDER', W - 10, 12, { align: 'right' });
+
+  // Sub-header
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`Movement No: ${movement.movement_no}`, 10, 26);
+  doc.text(`Type: ${movement.type}   Status: ${movement.status}`, 10, 31);
+  doc.text(`Date In: ${fmtDate(movement.date_in)}   Date Out: ${fmtDate(movement.date_out)}`, 10, 36);
+  doc.text(`Printed: ${new Date().toLocaleDateString('en-SG')}`, W - 10, 26, { align: 'right' });
+  if (movement.salesperson) doc.text(`Prepared by: ${movement.salesperson}`, W - 10, 31, { align: 'right' });
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, 40, W - 10, 40);
+
+  let y = 47;
+
+  // Cargo release details table
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...PRIMARY);
+  doc.text('CARGO RELEASE DETAILS', 10, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Field', 'Details']],
+    body: [
+      ['Company', releaseOrder.company_name || ''],
+      ['Collector / Driver', releaseOrder.collector_name || ''],
+      ['Quantity Out', String(releaseOrder.qty_out ?? 0)],
+      ['Number of Cartons', String(releaseOrder.num_cartons ?? 0)],
+      ['Vehicle Number', releaseOrder.vehicle_number || ''],
+    ],
+    styles: { fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: PRIMARY, textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55, fillColor: [245, 247, 255] }, 1: { cellWidth: 120 } },
+    alternateRowStyles: {},
+    margin: { left: 10, right: 10 },
+  });
+
+  y = doc.lastAutoTable.finalY + 14;
+
+  // Two-column section: Company Stamp + Vehicle/Acknowledgement
+  const colW = 85;
+  const col2x = 10 + colW + 10;
+
+  // Company Stamp box
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...PRIMARY);
+  doc.text('COMPANY STAMP', 10, y);
+  doc.setDrawColor(180, 180, 180);
+  doc.setFillColor(250, 251, 255);
+  doc.roundedRect(10, y + 4, colW, 45, 2, 2, 'FD');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(200, 200, 200);
+  doc.text('(Please affix company stamp here)', 10 + colW / 2, y + 28, { align: 'center' });
+
+  // Collector acknowledgement box
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...PRIMARY);
+  doc.text('ACKNOWLEDGEMENT', col2x, y);
+  doc.setDrawColor(180, 180, 180);
+  doc.setFillColor(250, 251, 255);
+  doc.roundedRect(col2x, y + 4, colW, 45, 2, 2, 'FD');
+
+  // Lines inside acknowledgement box
+  doc.setDrawColor(200, 200, 200);
+  doc.setTextColor(100, 100, 100);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  const ackY = y + 4;
+  // Vehicle number line
+  doc.text('Vehicle No.:', col2x + 4, ackY + 12);
+  doc.line(col2x + 26, ackY + 13, col2x + colW - 4, ackY + 13);
+  // Signature line
+  doc.text('Signature:', col2x + 4, ackY + 26);
+  doc.line(col2x + 22, ackY + 27, col2x + colW - 4, ackY + 27);
+  // Date line
+  doc.text('Date:', col2x + 4, ackY + 40);
+  doc.line(col2x + 15, ackY + 41, col2x + colW - 4, ackY + 41);
+
+  y += 65;
+
+  // Terms / notes
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7);
+  doc.setTextColor(150, 150, 150);
+  doc.text('This release order serves as proof of cargo collection. Collector is responsible for verifying quantities before signing.', 10, y, { maxWidth: W - 20 });
+
+  // Footer line
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, pageH - 12, W - 10, pageH - 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(180, 180, 180);
+  doc.text(`${BRAND} · ${movement.movement_no} · Generated ${new Date().toLocaleDateString('en-SG')}`, W / 2, pageH - 7, { align: 'center' });
+
+  doc.save(`RO-${movement.movement_no.replace('/', '-')}-${(releaseOrder.company_name || 'release').replace(/\s+/g, '-')}.pdf`);
+}

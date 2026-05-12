@@ -7,6 +7,7 @@ import { fmt, fmtDate, STATUS_COLORS, TYPE_COLORS, CURRENCIES, calcMovementTotal
 import { exportGRN, exportDO, exportInternalReport } from '../utils/pdfExports';
 import CostLinesTable from '../components/movement/CostLinesTable';
 import StockLinesTable from '../components/movement/StockLinesTable';
+import ReleaseOrderTable from '../components/movement/ReleaseOrderTable';
 import Toast from '../components/Toast';
 
 const STATUSES = ['New', 'In Progress', 'Completed', 'Voided'];
@@ -46,10 +47,11 @@ export default function MovementDetailPage() {
   const { getRate } = useFXRates();
 
   const {
-    movement, costLines, stockLines, loading, error,
+    movement, costLines, stockLines, releaseOrders, loading, error,
     updateMovement,
     addCostLine, updateCostLine, deleteCostLine,
     addStockLine, updateStockLine, deleteStockLine,
+    addReleaseOrder, updateReleaseOrder, deleteReleaseOrder,
   } = useMovementDetail(id);
 
   const [form, setForm] = useState(null);
@@ -308,6 +310,17 @@ export default function MovementDetailPage() {
               onUpdate={updateStockLine}
               onDelete={deleteStockLine}
               />
+          </Section>
+
+          {/* Release Orders */}
+          <Section title="Release Orders">
+            <ReleaseOrderTable
+              lines={releaseOrders}
+              movement={movement}
+              onAdd={addReleaseOrder}
+              onUpdate={updateReleaseOrder}
+              onDelete={deleteReleaseOrder}
+            />
           </Section>
 
           {/* P&L Summary */}
