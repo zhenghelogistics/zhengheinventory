@@ -21,7 +21,6 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
       sku: line.sku || '',
       description: line.description || '',
       unit: line.unit || 'pcs',
-      qty_ordered: line.qty_ordered ?? '',
       qty_actual: line.qty_actual ?? '',
       qty_out: line.qty_out ?? '',
       date_in: line.date_in || '',
@@ -36,7 +35,6 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
       sku: draft.sku,
       description: draft.description,
       unit: draft.unit,
-      qty_ordered: parseFloat(draft.qty_ordered) || 0,
       qty_actual: parseFloat(draft.qty_actual) || 0,
       qty_out: parseFloat(draft.qty_out) || 0,
       date_in: draft.date_in || null,
@@ -52,7 +50,7 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
   const totalOut = lines.reduce((s, l) => s + (Number(l.qty_out) || 0), 0);
   const totalBalance = totalIn - totalOut;
 
-  const COLS = ['SKU', 'Description', 'Unit', 'Qty Ordered', 'Qty In', 'Qty Out', 'Balance', 'Date In', 'Date Out', 'Status', 'Remarks', ''];
+  const COLS = ['SKU', 'Description', 'Unit', 'Qty In', 'Qty Out', 'Balance', 'Date In', 'Date Out', 'Status', 'Remarks', ''];
 
   return (
     <div className="space-y-3">
@@ -100,7 +98,6 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                       {UNITS.map((u) => <option key={u}>{u}</option>)}
                     </select>
                   </td>
-                  <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_ordered} onChange={(e) => setDraft((p) => ({ ...p, qty_ordered: e.target.value }))} placeholder="0" /></td>
                   <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_actual} onChange={(e) => setDraft((p) => ({ ...p, qty_actual: e.target.value }))} placeholder="0" /></td>
                   <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_out} onChange={(e) => setDraft((p) => ({ ...p, qty_out: e.target.value }))} placeholder="0" /></td>
                   <td className="px-2 py-1.5 text-center">
@@ -128,7 +125,6 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                   <td className="px-3 py-2.5 font-mono text-slate-700">{line.sku || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-700 max-w-[180px] truncate">{line.description || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-500">{line.unit || '—'}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-slate-500">{line.qty_ordered ?? 0}</td>
                   <td className="px-3 py-2.5 tabular-nums text-slate-700 font-medium">{line.qty_actual ?? 0}</td>
                   <td className="px-3 py-2.5 tabular-nums text-orange-600 font-medium">{line.qty_out ?? 0}</td>
                   <td className="px-3 py-2.5">
@@ -165,7 +161,6 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
                 <td colSpan={3} className="px-3 py-2.5 text-right text-xs text-slate-500">Totals</td>
-                <td className="px-3 py-2.5 tabular-nums text-slate-500">{lines.reduce((s, l) => s + (Number(l.qty_ordered) || 0), 0)}</td>
                 <td className="px-3 py-2.5 tabular-nums text-slate-700">{totalIn}</td>
                 <td className="px-3 py-2.5 tabular-nums text-orange-600">{totalOut}</td>
                 <td className="px-3 py-2.5">
