@@ -28,6 +28,26 @@ export function useMovementDetail(id) {
 
   useEffect(() => { fetch(); }, [fetch]);
 
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`stock_lines_rt_${id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'stock_lines', filter: `movement_id=eq.${id}` }, (payload) => {
+        setStockLines((prev) => prev.map((l) => l.id === payload.new.id ? payload.new : l));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'stock_lines', filter: `movement_id=eq.${id}` }, (payload) => {
+        setStockLines((prev) => {
+          if (prev.find((l) => l.id === payload.new.id)) return prev;
+          return [...prev, payload.new];
+        });
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'stock_lines', filter: `movement_id=eq.${id}` }, (payload) => {
+        setStockLines((prev) => prev.filter((l) => l.id !== payload.old.id));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id]);
+
   const updateMovement = useCallback(async (fields) => {
     const { data, error } = await supabase
       .from('movements')

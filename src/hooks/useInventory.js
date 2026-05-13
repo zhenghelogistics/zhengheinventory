@@ -65,6 +65,21 @@ export function useInventory() {
       setLoading(false);
     }
     fetchAll();
+
+    const channel = supabase
+      .channel('inventory_records_rt')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inventory_records' }, (payload) => {
+        setRecords((prev) => prev.map((r) => r.id === payload.new.id ? fromRow(payload.new) : r));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inventory_records' }, (payload) => {
+        setRecords((prev) => [...prev, fromRow(payload.new)]);
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'inventory_records' }, (payload) => {
+        setRecords((prev) => prev.filter((r) => r.id !== payload.old.id));
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const addRecord = useCallback(async (data) => {
