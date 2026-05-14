@@ -15,6 +15,19 @@ function isOut(line_type) {
   return line_type === 'Outbound';
 }
 
+function calcCBM(l, b, h, pkgs) {
+  const lv = parseFloat(l) || 0;
+  const bv = parseFloat(b) || 0;
+  const hv = parseFloat(h) || 0;
+  const pv = parseInt(pkgs) || 0;
+  if (!lv || !bv || !hv || !pv) return null;
+  return (lv * bv * hv * pv) / 1_000_000;
+}
+
+function fmtCBM(cbm) {
+  return cbm != null ? cbm.toFixed(3) : '—';
+}
+
 export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
   const [editId, setEditId] = useState(null);
   const [draft, setDraft] = useState({});
@@ -23,13 +36,17 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
   function startEdit(line) {
     setEditId(line.id);
     setDraft({
-      line_type: line.line_type || 'Inbound',
-      sku: line.sku || '',
-      description: line.description || '',
-      unit: line.unit || 'pcs',
-      qty_actual: line.qty_actual ?? '',
-      date_in: line.date_in || '',
-      remarks: line.remarks || '',
+      line_type:    line.line_type    || 'Inbound',
+      sku:          line.sku          || '',
+      description:  line.description  || '',
+      unit:         line.unit         || 'pcs',
+      qty_actual:   line.qty_actual   ?? '',
+      date_in:      line.date_in      || '',
+      remarks:      line.remarks      || '',
+      length_cm:    line.length_cm    ?? '',
+      breadth_cm:   line.breadth_cm   ?? '',
+      height_cm:    line.height_cm    ?? '',
+      num_packages: line.num_packages ?? '',
     });
   }
 
@@ -37,32 +54,58 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
     setSaving(true);
     const qty = parseFloat(draft.qty_actual) || 0;
     await onUpdate(editId, {
-      line_type: draft.line_type,
-      sku: draft.sku,
-      description: draft.description,
-      unit: draft.unit,
-      qty_actual: isOut(draft.line_type) ? 0 : qty,
-      qty_out: isOut(draft.line_type) ? qty : 0,
-      date_in: isOut(draft.line_type) ? null : (draft.date_in || null),
-      date_out: isOut(draft.line_type) ? (draft.date_in || null) : null,
-      remarks: draft.remarks,
+      line_type:    draft.line_type,
+      sku:          draft.sku,
+      description:  draft.description,
+      unit:         draft.unit,
+      qty_actual:   isOut(draft.line_type) ? 0   : qty,
+      qty_out:      isOut(draft.line_type) ? qty : 0,
+      date_in:      isOut(draft.line_type) ? null : (draft.date_in || null),
+      date_out:     isOut(draft.line_type) ? (draft.date_in || null) : null,
+      remarks:      draft.remarks,
+      length_cm:    parseFloat(draft.length_cm)   || null,
+      breadth_cm:   parseFloat(draft.breadth_cm)  || null,
+      height_cm:    parseFloat(draft.height_cm)   || null,
+      num_packages: parseInt(draft.num_packages)  || null,
     });
     setSaving(false);
     setEditId(null);
   }
 
-  // Balance: Inbound + Replenishment add, Outbound subtracts
+  // Overall balance
   const totalIn  = lines.filter((l) => !isOut(l.line_type)).reduce((s, l) => s + (Number(l.qty_actual) || 0), 0);
-  const totalOut = lines.filter((l) => isOut(l.line_type)).reduce((s, l) => s + (Number(l.qty_out) || 0), 0);
+  const totalOut = lines.filter((l) =>  isOut(l.line_type)).reduce((s, l) => s + (Number(l.qty_out)    || 0), 0);
   const balance  = totalIn - totalOut;
 
-  const COLS = ['Event', 'SKU', 'Description', 'Unit', 'Qty', 'Date', 'Remarks', ''];
+  // Per-SKU balance map (keyed by sku, fallback to description)
+  const skuBalMap = {};
+  lines.forEach((line) => {
+    const key = line.sku || line.description || String(line.id);
+    skuBalMap[key] = (skuBalMap[key] || 0) + (
+      isOut(line.line_type)
+        ? -(Number(line.qty_out)    || 0)
+        :  (Number(line.qty_actual) || 0)
+    );
+  });
+
+  // Total CBM across all lines
+  const totalCBM = lines.reduce((s, l) => {
+    const c = calcCBM(l.length_cm, l.breadth_cm, l.height_cm, l.num_packages);
+    return c ? s + c : s;
+  }, 0);
+
+  // Live CBM preview while editing
+  const draftCBM = editId
+    ? calcCBM(draft.length_cm, draft.breadth_cm, draft.height_cm, draft.num_packages)
+    : null;
+
+  const COLS = ['Event', 'SKU', 'Description', 'Unit', 'Qty', 'L × B × H (cm)', 'Pkgs', 'CBM', 'Balance', 'Date', 'Remarks', ''];
 
   return (
     <div className="space-y-3">
       {/* Summary pills */}
       {lines.length > 0 && (
-        <div className="flex items-stretch gap-3">
+        <div className="flex items-stretch gap-3 flex-wrap">
           <SummaryPill label="Total In"  value={`+${totalIn}`}  color="text-violet-700 bg-violet-50 border-violet-200" />
           <SummaryPill label="Total Out" value={`-${totalOut}`} color="text-orange-600 bg-orange-50 border-orange-200" />
           <SummaryPill
@@ -72,6 +115,9 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
             color={balance > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : balance === 0 ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-red-600 bg-red-50 border-red-200'}
             bold
           />
+          {totalCBM > 0 && (
+            <SummaryPill label="Total CBM" value={totalCBM.toFixed(3)} color="text-sky-700 bg-sky-50 border-sky-200" />
+          )}
         </div>
       )}
 
@@ -93,9 +139,13 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
               </tr>
             )}
             {lines.map((line) => {
-              const out = isOut(line.line_type);
-              const qty = out ? (Number(line.qty_out) || 0) : (Number(line.qty_actual) || 0);
-              const date = out ? line.date_out : line.date_in;
+              const out     = isOut(line.line_type);
+              const qty     = out ? (Number(line.qty_out) || 0) : (Number(line.qty_actual) || 0);
+              const date    = out ? line.date_out : line.date_in;
+              const lineCBM = calcCBM(line.length_cm, line.breadth_cm, line.height_cm, line.num_packages);
+              const skuKey  = line.sku || line.description || String(line.id);
+              const skuBal  = skuBalMap[skuKey] ?? 0;
+
               return editId === line.id ? (
                 <tr key={line.id} className="bg-blue-50/60 border-b border-blue-100">
                   <td className="px-2 py-1.5">
@@ -103,16 +153,44 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                       {LINE_TYPES.map((t) => <option key={t}>{t}</option>)}
                     </select>
                   </td>
-                  <td className="px-2 py-1.5"><input className={inp} value={draft.sku} onChange={(e) => setDraft((p) => ({ ...p, sku: e.target.value }))} placeholder="SKU" /></td>
-                  <td className="px-2 py-1.5"><input className={inp + ' min-w-[140px]'} value={draft.description} onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))} placeholder="Description" /></td>
+                  <td className="px-2 py-1.5">
+                    <input className={inp} value={draft.sku} onChange={(e) => setDraft((p) => ({ ...p, sku: e.target.value }))} placeholder="SKU" />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input className={inp + ' min-w-[140px]'} value={draft.description} onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))} placeholder="Description" />
+                  </td>
                   <td className="px-2 py-1.5">
                     <select className={inp} value={draft.unit} onChange={(e) => setDraft((p) => ({ ...p, unit: e.target.value }))}>
                       {UNITS.map((u) => <option key={u}>{u}</option>)}
                     </select>
                   </td>
-                  <td className="px-2 py-1.5"><input type="number" className={inp} value={draft.qty_actual} onChange={(e) => setDraft((p) => ({ ...p, qty_actual: e.target.value }))} placeholder="0" /></td>
-                  <td className="px-2 py-1.5"><input type="date" className={inp} value={draft.date_in} onChange={(e) => setDraft((p) => ({ ...p, date_in: e.target.value }))} /></td>
-                  <td className="px-2 py-1.5"><input className={inp} value={draft.remarks} onChange={(e) => setDraft((p) => ({ ...p, remarks: e.target.value }))} placeholder="Remarks" /></td>
+                  <td className="px-2 py-1.5">
+                    <input type="number" className={inp} value={draft.qty_actual} onChange={(e) => setDraft((p) => ({ ...p, qty_actual: e.target.value }))} placeholder="0" />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-1 min-w-[190px]">
+                      <input type="number" className={inp} value={draft.length_cm}  onChange={(e) => setDraft((p) => ({ ...p, length_cm:  e.target.value }))} placeholder="L" />
+                      <span className="text-slate-400 shrink-0">×</span>
+                      <input type="number" className={inp} value={draft.breadth_cm} onChange={(e) => setDraft((p) => ({ ...p, breadth_cm: e.target.value }))} placeholder="B" />
+                      <span className="text-slate-400 shrink-0">×</span>
+                      <input type="number" className={inp} value={draft.height_cm}  onChange={(e) => setDraft((p) => ({ ...p, height_cm:  e.target.value }))} placeholder="H" />
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input type="number" className={inp} value={draft.num_packages} onChange={(e) => setDraft((p) => ({ ...p, num_packages: e.target.value }))} placeholder="0" />
+                  </td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <span className={`font-mono font-semibold ${draftCBM ? 'text-sky-600' : 'text-slate-300'}`}>
+                      {fmtCBM(draftCBM)}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-300">—</td>
+                  <td className="px-2 py-1.5">
+                    <input type="date" className={inp} value={draft.date_in} onChange={(e) => setDraft((p) => ({ ...p, date_in: e.target.value }))} />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input className={inp} value={draft.remarks} onChange={(e) => setDraft((p) => ({ ...p, remarks: e.target.value }))} placeholder="Remarks" />
+                  </td>
                   <td className="px-2 py-1.5">
                     <div className="flex gap-1">
                       <button onClick={saveEdit} disabled={saving} className="p-1.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer"><Check size={12} /></button>
@@ -135,6 +213,18 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                       {out ? `-${qty}` : `+${qty}`}
                     </span>
                   </td>
+                  <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap font-mono">
+                    {line.length_cm && line.breadth_cm && line.height_cm
+                      ? `${line.length_cm} × ${line.breadth_cm} × ${line.height_cm}`
+                      : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-500 tabular-nums">{line.num_packages || '—'}</td>
+                  <td className="px-3 py-2.5 tabular-nums font-semibold text-sky-700">{fmtCBM(lineCBM)}</td>
+                  <td className="px-3 py-2.5 tabular-nums font-bold">
+                    <span className={skuBal > 0 ? 'text-emerald-600' : skuBal < 0 ? 'text-red-500' : 'text-slate-400'}>
+                      {skuBal}
+                    </span>
+                  </td>
                   <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(date)}</td>
                   <td className="px-3 py-2.5 text-slate-400 max-w-[100px] truncate">{line.remarks || '—'}</td>
                   <td className="px-3 py-2.5">
@@ -150,11 +240,15 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
           {lines.length > 0 && (
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
-                <td colSpan={4} className="px-3 py-2.5 text-right text-xs text-slate-500">Balance</td>
+                <td colSpan={4} className="px-3 py-2.5 text-right text-xs text-slate-500">Totals</td>
                 <td className={`px-3 py-2.5 tabular-nums font-bold ${balance > 0 ? 'text-emerald-600' : balance === 0 ? 'text-slate-400' : 'text-red-500'}`}>
                   {balance}
                 </td>
-                <td colSpan={3} />
+                <td colSpan={2} />
+                <td className="px-3 py-2.5 tabular-nums font-bold text-sky-700">
+                  {totalCBM > 0 ? totalCBM.toFixed(3) : '—'}
+                </td>
+                <td colSpan={4} />
               </tr>
             </tfoot>
           )}
@@ -181,4 +275,4 @@ function SummaryPill({ label, value, color, sub, bold }) {
   );
 }
 
-const inp = 'w-full px-2 py-1 rounded border border-blue-200 bg-white text-xs text-slate-700 focus:outline-none focus:border-blue-400 min-w-[70px]';
+const inp = 'w-full px-2 py-1 rounded border border-blue-200 bg-white text-xs text-slate-700 focus:outline-none focus:border-blue-400 min-w-[60px]';
