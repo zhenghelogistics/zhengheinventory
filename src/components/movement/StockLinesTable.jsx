@@ -37,6 +37,7 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
     setEditId(line.id);
     setDraft({
       line_type:    line.line_type    || 'Inbound',
+      nexus_job_no: line.nexus_job_no || '',
       sku:          line.sku          || '',
       description:  line.description  || '',
       unit:         line.unit         || 'pcs',
@@ -55,6 +56,7 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
     const qty = parseFloat(draft.qty_actual) || 0;
     await onUpdate(editId, {
       line_type:    draft.line_type,
+      nexus_job_no: draft.nexus_job_no || null,
       sku:          draft.sku,
       description:  draft.description,
       unit:         draft.unit,
@@ -99,7 +101,7 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
     ? calcCBM(draft.length_cm, draft.breadth_cm, draft.height_cm, draft.num_packages)
     : null;
 
-  const COLS = ['Event', 'SKU', 'Description', 'Unit', 'Qty', 'L × B × H (cm)', 'Pkgs', 'CBM', 'Balance', 'Date', 'Remarks', ''];
+  const COLS = ['Event', 'Nexus Job', 'SKU', 'Description', 'Unit', 'Qty', 'L × B × H (cm)', 'Pkgs', 'CBM', 'Balance', 'Date', 'Remarks', ''];
 
   return (
     <div className="space-y-3">
@@ -154,6 +156,9 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                     </select>
                   </td>
                   <td className="px-2 py-1.5">
+                    <input className={inp} value={draft.nexus_job_no} onChange={(e) => setDraft((p) => ({ ...p, nexus_job_no: e.target.value }))} placeholder="ZHL-000/00" />
+                  </td>
+                  <td className="px-2 py-1.5">
                     <input className={inp} value={draft.sku} onChange={(e) => setDraft((p) => ({ ...p, sku: e.target.value }))} placeholder="SKU" />
                   </td>
                   <td className="px-2 py-1.5">
@@ -205,6 +210,7 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
                       {line.line_type || 'Inbound'}
                     </span>
                   </td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-blue-600 whitespace-nowrap">{line.nexus_job_no || '—'}</td>
                   <td className="px-3 py-2.5 font-mono text-slate-700">{line.sku || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-700 max-w-[180px] truncate">{line.description || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-500">{line.unit || '—'}</td>
@@ -240,7 +246,7 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete }) {
           {lines.length > 0 && (
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
-                <td colSpan={4} className="px-3 py-2.5 text-right text-xs text-slate-500">Totals</td>
+                <td colSpan={5} className="px-3 py-2.5 text-right text-xs text-slate-500">Totals</td>
                 <td className={`px-3 py-2.5 tabular-nums font-bold ${balance > 0 ? 'text-emerald-600' : balance === 0 ? 'text-slate-400' : 'text-red-500'}`}>
                   {balance}
                 </td>
