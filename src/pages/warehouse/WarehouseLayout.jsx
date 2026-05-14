@@ -14,7 +14,7 @@ export default function WarehouseLayout() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col" style={{ fontFamily: "'Fira Sans', system-ui, sans-serif" }}>
       {/* Top bar */}
-      <header className="bg-blue-700 px-4 h-14 flex items-center justify-between shrink-0">
+      <header className="bg-[#0f1f5c] px-4 h-14 flex items-center justify-between shrink-0 border-b border-white/10">
         <div className="flex items-center gap-2">
           {!isHome && (
             <button

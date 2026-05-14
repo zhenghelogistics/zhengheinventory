@@ -44,16 +44,12 @@ const NAV = [
 function MainApp() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'Fira Sans', system-ui, sans-serif" }}>
-      <header className="bg-blue-700 px-5 py-0 flex items-center h-12 shrink-0 z-30">
+      <header className="bg-[#0f1f5c] px-5 py-0 flex items-center h-12 shrink-0 z-30 border-b border-white/10">
         <div className="flex items-center gap-2.5 mr-8">
-          <div className="w-7 h-7 rounded-md bg-white/20 flex items-center justify-center">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-              <line x1="12" y1="22.08" x2="12" y2="12"/>
-            </svg>
+          <div className="flex flex-col leading-none">
+            <span className="text-white font-black text-lg tracking-widest">HIVE</span>
+            <span className="text-white/40 text-[9px] tracking-widest uppercase">Zhenghe Logistics</span>
           </div>
-          <span className="text-sm font-bold text-white tracking-wide">Zhenghe Logistics</span>
         </div>
         <nav className="flex items-center gap-1 h-full">
           {NAV.map(({ to, end, label, icon }) => (
@@ -65,7 +61,7 @@ function MainApp() {
                 `flex items-center gap-2 px-4 h-full text-xs font-semibold transition-colors duration-150 cursor-pointer ` +
                 (isActive
                   ? 'text-white border-b-2 border-white'
-                  : 'text-blue-200 hover:text-white border-b-2 border-transparent')
+                  : 'text-white/40 hover:text-white border-b-2 border-transparent')
               }
             >
               {icon}

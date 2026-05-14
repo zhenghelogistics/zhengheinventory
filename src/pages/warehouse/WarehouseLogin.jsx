@@ -20,7 +20,7 @@ export default function WarehouseLogin() {
   const PAD = ['1','2','3','4','5','6','7','8','9','⌫','0','✓'];
 
   return (
-    <div className="min-h-screen bg-blue-700 flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen bg-[#0f1f5c] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
@@ -31,8 +31,9 @@ export default function WarehouseLogin() {
               <line x1="12" y1="22.08" x2="12" y2="12"/>
             </svg>
           </div>
-          <h1 className="text-white text-2xl font-bold">Warehouse</h1>
-          <p className="text-blue-200 text-sm mt-1">Sign in to continue</p>
+          <h1 className="text-white text-3xl font-black tracking-widest">HIVE</h1>
+          <p className="text-white/40 text-xs tracking-widest uppercase mt-0.5">Zhenghe Logistics</p>
+          <p className="text-white/60 text-sm mt-3">Sign in to continue</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 shadow-2xl space-y-5">
@@ -76,7 +77,7 @@ export default function WarehouseLogin() {
                       key={d}
                       type="submit"
                       disabled={loading || !name.trim() || pin.length < 4}
-                      className="h-14 rounded-xl bg-blue-600 text-white font-bold text-xl flex items-center justify-center active:bg-blue-700 disabled:opacity-40 cursor-pointer"
+                      className="h-14 rounded-xl bg-[#0f1f5c] text-white font-bold text-xl flex items-center justify-center active:bg-[#1a2f7a] disabled:opacity-40 cursor-pointer"
                     >
                       {loading ? '…' : '✓'}
                     </button>
