@@ -11,7 +11,6 @@ import ReleaseOrderTable from '../components/movement/ReleaseOrderTable';
 import Toast from '../components/Toast';
 
 const STATUSES = ['New', 'In Progress', 'Completed', 'Voided'];
-const SALESPERSONS = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eric', 'Fiona'];
 
 function Section({ title, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -216,8 +215,7 @@ export default function MovementDetailPage() {
                 <input type="date" className={inp} value={form.date_out} onChange={(e) => set('date_out', e.target.value)} />
               </Field>
               <Field label="Salesperson">
-                <input className={inp} value={form.salesperson} onChange={(e) => set('salesperson', e.target.value)} placeholder="Name" list="salesperson-list" />
-                <datalist id="salesperson-list">{SALESPERSONS.map((s) => <option key={s} value={s} />)}</datalist>
+                <input className={inp} value={form.salesperson} onChange={(e) => set('salesperson', e.target.value)} placeholder="Name" />
               </Field>
               <Field label="Customer Ref / PO No.">
                 <input className={inp} value={form.customer_ref} onChange={(e) => set('customer_ref', e.target.value)} placeholder="e.g. PO-1234" />
