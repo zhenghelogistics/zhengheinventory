@@ -46,7 +46,7 @@ function MainApp() {
     <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'Fira Sans', system-ui, sans-serif" }}>
       <header className="bg-[#0f1f5c] px-5 py-0 flex items-center h-12 shrink-0 z-30 border-b border-white/10">
         <div className="flex items-center mr-8">
-          <img src="/hive-logo.svg" alt="Hive" className="h-7 w-auto" />
+          <img src="/hive-logo.svg" alt="Hive" className="h-9 w-auto" />
         </div>
         <nav className="flex items-center gap-1 h-full">
           {NAV.map(({ to, end, label, icon }) => (
