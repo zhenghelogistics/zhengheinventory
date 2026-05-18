@@ -5,13 +5,34 @@ import { fmtDate, fmt } from './movementHelpers';
 const BRAND = 'Zhenghe Logistics';
 const PRIMARY = [30, 64, 175]; // blue-700
 
-function header(doc, title, movement) {
+async function loadLogoBase64(url) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function header(doc, title, movement) {
   doc.setFillColor(...PRIMARY);
   doc.rect(0, 0, 297, 18, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text(BRAND, 10, 12);
+
+  const logo = await loadLogoBase64('/zhl-logo-white.png');
+  if (logo) {
+    doc.addImage(logo, 'PNG', 8, 1.5, 50, 14);
+  } else {
+    doc.setFontSize(11);
+    doc.text(BRAND, 10, 12);
+  }
+
   doc.setFontSize(10);
   doc.text(title, 297 - 10, 12, { align: 'right' });
 
@@ -55,9 +76,9 @@ function signatureFooter(doc, label, name, pageHeight) {
 }
 
 // ── GRN ──────────────────────────────────────────────────────────────────────
-export function exportGRN(movement, stockLines) {
+export async function exportGRN(movement, stockLines) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  let y = header(doc, 'GOODS RECEIVED NOTE', movement);
+  let y = await header(doc, 'GOODS RECEIVED NOTE', movement);
 
   y = supplierBlock(doc, movement, y);
 
@@ -103,9 +124,9 @@ export function exportGRN(movement, stockLines) {
 }
 
 // ── Delivery Order ────────────────────────────────────────────────────────────
-export function exportDO(movement, stockLines) {
+export async function exportDO(movement, stockLines) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  let y = header(doc, 'DELIVERY ORDER', movement);
+  let y = await header(doc, 'DELIVERY ORDER', movement);
 
   // Customer + Delivery
   const col2 = 150;
@@ -140,9 +161,9 @@ export function exportDO(movement, stockLines) {
 }
 
 // ── Internal Movement Report ──────────────────────────────────────────────────
-export function exportInternalReport(movement, costLines, stockLines) {
+export async function exportInternalReport(movement, costLines, stockLines) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  let y = header(doc, 'INTERNAL MOVEMENT REPORT', movement);
+  let y = await header(doc, 'INTERNAL MOVEMENT REPORT', movement);
 
   // Info block
   const col2 = 150;
@@ -241,7 +262,7 @@ export function exportInternalReport(movement, costLines, stockLines) {
 }
 
 // ── Release Order ─────────────────────────────────────────────────────────────
-export function exportReleaseOrder(movement, releaseOrder) {
+export async function exportReleaseOrder(movement, releaseOrder) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210;
   const pageH = doc.internal.pageSize.height;
@@ -251,8 +272,15 @@ export function exportReleaseOrder(movement, releaseOrder) {
   doc.rect(0, 0, W, 18, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text(BRAND, 10, 12);
+
+  const logo = await loadLogoBase64('/zhl-logo-white.png');
+  if (logo) {
+    doc.addImage(logo, 'PNG', 8, 1.5, 40, 14);
+  } else {
+    doc.setFontSize(11);
+    doc.text(BRAND, 10, 12);
+  }
+
   doc.setFontSize(10);
   doc.text('RELEASE ORDER', W - 10, 12, { align: 'right' });
 
