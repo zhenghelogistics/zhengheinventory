@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, FileText, Truck, ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -51,6 +51,16 @@ export default function MovementDetailPage() {
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const pdfRef = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (pdfRef.current && !pdfRef.current.contains(e.target)) setPdfOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
   useEffect(() => {
@@ -138,28 +148,33 @@ export default function MovementDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* PDF Exports */}
-          <div className="relative group">
-            <button className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">
+          <div className="relative" ref={pdfRef}>
+            <button
+              onClick={() => setPdfOpen((p) => !p)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
               <FileText size={13} strokeWidth={2.5} />
               Export PDF
               <ChevronDown size={12} />
             </button>
-            <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1 hidden group-hover:block z-30">
-              <button
-                onClick={() => exportGRN(movement, stockLines)}
-                className="w-full text-left px-3 py-2.5 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
-              >
-                <ClipboardList size={13} className="text-violet-500" />
-                Goods Received Note (GRN)
-              </button>
-              <button
-                onClick={() => exportDO(movement, stockLines)}
-                className="w-full text-left px-3 py-2.5 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
-              >
-                <Truck size={13} className="text-blue-500" />
-                Delivery Order (DO)
-              </button>
-            </div>
+            {pdfOpen && (
+              <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-30">
+                <button
+                  onClick={() => { exportGRN(movement, stockLines); setPdfOpen(false); }}
+                  className="w-full text-left px-3 py-2.5 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
+                >
+                  <ClipboardList size={13} className="text-violet-500" />
+                  Goods Received Note (GRN)
+                </button>
+                <button
+                  onClick={() => { exportDO(movement, stockLines); setPdfOpen(false); }}
+                  className="w-full text-left px-3 py-2.5 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
+                >
+                  <Truck size={13} className="text-blue-500" />
+                  Delivery Order (DO)
+                </button>
+              </div>
+            )}
           </div>
           <button
             onClick={handleSave}
