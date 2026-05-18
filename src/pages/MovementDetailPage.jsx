@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, FileText, Truck, ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
+
 import { useMovementDetail } from '../hooks/useMovementDetail';
-import { useFXRates } from '../hooks/useFXRates';
-import { fmt, fmtDate, STATUS_COLORS, TYPE_COLORS, CURRENCIES, calcMovementTotals } from '../utils/movementHelpers';
-import { exportGRN, exportDO, exportInternalReport } from '../utils/pdfExports';
-import CostLinesTable from '../components/movement/CostLinesTable';
+import { fmtDate, STATUS_COLORS, TYPE_COLORS } from '../utils/movementHelpers';
+import { exportGRN, exportDO } from '../utils/pdfExports';
 import StockLinesTable from '../components/movement/StockLinesTable';
 import ReleaseOrderTable from '../components/movement/ReleaseOrderTable';
 import Toast from '../components/Toast';
@@ -43,12 +42,9 @@ const sel = inp + ' cursor-pointer';
 export default function MovementDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getRate } = useFXRates();
-
   const {
-    movement, costLines, stockLines, releaseOrders, loading, error,
+    movement, stockLines, releaseOrders, loading, error,
     updateMovement,
-    addCostLine, updateCostLine, deleteCostLine,
     addStockLine, updateStockLine, deleteStockLine,
     addReleaseOrder, updateReleaseOrder, deleteReleaseOrder,
   } = useMovementDetail(id);
@@ -83,8 +79,6 @@ export default function MovementDetailPage() {
         packages: movement.packages || '',
         weight_kg: movement.weight_kg || '',
         cbm: movement.cbm || '',
-        // P&L
-        total_sale: movement.total_sale || '',
         notes: movement.notes || '',
       });
     }
@@ -99,7 +93,6 @@ export default function MovementDetailPage() {
       weight_kg: form.weight_kg ? parseFloat(form.weight_kg) : null,
       cbm: form.cbm ? parseFloat(form.cbm) : null,
       packages: form.packages ? parseInt(form.packages) : null,
-      total_sale: form.total_sale ? parseFloat(form.total_sale) : null,
     });
     setSaving(false);
     setToast({ message: ok ? 'Movement saved.' : 'Save failed.', type: ok ? 'success' : 'error' });
@@ -120,11 +113,6 @@ export default function MovementDetailPage() {
       </div>
     );
   }
-
-  const totalCost = costLines.reduce((s, l) => s + (Number(l.amount_sgd) || 0), 0);
-  const sale = parseFloat(form.total_sale) || 0;
-  const profit = sale - totalCost;
-  const gp = sale > 0 ? ((profit / sale) * 100).toFixed(1) : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -171,13 +159,6 @@ export default function MovementDetailPage() {
                 <Truck size={13} className="text-blue-500" />
                 Delivery Order (DO)
               </button>
-              <button
-                onClick={() => exportInternalReport(movement, costLines, stockLines)}
-                className="w-full text-left px-3 py-2.5 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
-              >
-                <FileText size={13} className="text-emerald-500" />
-                Internal Movement Report
-              </button>
             </div>
           </div>
           <button
@@ -220,6 +201,11 @@ export default function MovementDetailPage() {
               <Field label="Customer Ref / PO No.">
                 <input className={inp} value={form.customer_ref} onChange={(e) => set('customer_ref', e.target.value)} placeholder="e.g. PO-1234" />
               </Field>
+              {movement.nexus_job_no && (
+                <Field label="Nexus Job No.">
+                  <div className="px-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 text-blue-700 font-mono font-semibold">{movement.nexus_job_no}</div>
+                </Field>
+              )}
               <Field label="Notes">
                 <textarea rows={2} className={inp + ' resize-none col-span-2'} value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Internal notes…" />
               </Field>
@@ -289,22 +275,11 @@ export default function MovementDetailPage() {
             </div>
           </Section>
 
-          {/* Cost Lines */}
-          <Section title="Cost Lines">
-            <CostLinesTable
-              lines={costLines}
-              onAdd={addCostLine}
-              onUpdate={updateCostLine}
-              onDelete={deleteCostLine}
-              getRate={getRate}
-            />
-          </Section>
-
           {/* Stock Lines */}
           <Section title="Stock Lines">
             <StockLinesTable
               lines={stockLines}
-              movementType={form.type}
+              movementNo={movement.movement_no}
               onAdd={addStockLine}
               onUpdate={updateStockLine}
               onDelete={deleteStockLine}
@@ -322,39 +297,6 @@ export default function MovementDetailPage() {
             />
           </Section>
 
-          {/* P&L Summary */}
-          <Section title="P &amp; L Summary">
-            <div className="flex items-end gap-4 flex-wrap">
-              <div className="flex-1 min-w-[160px]">
-                <Field label="Total Sale (SGD)">
-                  <input
-                    type="number"
-                    step="0.01"
-                    className={inp}
-                    value={form.total_sale}
-                    onChange={(e) => set('total_sale', e.target.value)}
-                    placeholder="0.00"
-                  />
-                </Field>
-              </div>
-              <div className="flex gap-6 flex-wrap pb-1">
-                <PLCell label="Total Cost (SGD)" value={`S$ ${fmt(totalCost)}`} color="text-slate-700" />
-                <PLCell label="Total Sale (SGD)" value={`S$ ${fmt(sale)}`} color="text-slate-700" />
-                <PLCell
-                  label="Profit (SGD)"
-                  value={`S$ ${fmt(profit)}`}
-                  color={profit >= 0 ? 'text-emerald-600' : 'text-red-500'}
-                />
-                {gp !== null && (
-                  <PLCell
-                    label="GP%"
-                    value={`${gp}%`}
-                    color={parseFloat(gp) >= 0 ? 'text-emerald-600' : 'text-red-500'}
-                  />
-                )}
-              </div>
-            </div>
-          </Section>
 
         </div>
       </div>

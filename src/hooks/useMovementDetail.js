@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 
 export function useMovementDetail(id) {
   const [movement, setMovement] = useState(null);
-  const [costLines, setCostLines] = useState([]);
   const [stockLines, setStockLines] = useState([]);
   const [releaseOrders, setReleaseOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,15 +11,13 @@ export function useMovementDetail(id) {
   const fetch = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [mv, cl, sl, ro] = await Promise.all([
+    const [mv, sl, ro] = await Promise.all([
       supabase.from('movements').select('*').eq('id', id).single(),
-      supabase.from('cost_lines').select('*').eq('movement_id', id).order('sort_order').order('created_at'),
       supabase.from('stock_lines').select('*').eq('movement_id', id).order('sort_order').order('created_at'),
       supabase.from('release_orders').select('*').eq('movement_id', id).order('sort_order').order('created_at'),
     ]);
     if (mv.error) { setError(mv.error.message); setLoading(false); return; }
     setMovement(mv.data);
-    setCostLines(cl.data || []);
     setStockLines(sl.data || []);
     setReleaseOrders(ro.data || []);
     setLoading(false);
@@ -60,37 +57,11 @@ export function useMovementDetail(id) {
     return true;
   }, [id]);
 
-  // Cost lines
-  const addCostLine = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('cost_lines')
-      .insert({ movement_id: id, currency: 'SGD', sort_order: costLines.length })
-      .select().single();
-    if (error) return null;
-    setCostLines((prev) => [...prev, data]);
-    return data;
-  }, [id, costLines.length]);
-
-  const updateCostLine = useCallback(async (lineId, fields) => {
-    const { data, error } = await supabase
-      .from('cost_lines').update(fields).eq('id', lineId).select().single();
-    if (error) return false;
-    setCostLines((prev) => prev.map((l) => l.id === lineId ? data : l));
-    return true;
-  }, []);
-
-  const deleteCostLine = useCallback(async (lineId) => {
-    const { error } = await supabase.from('cost_lines').delete().eq('id', lineId);
-    if (error) return false;
-    setCostLines((prev) => prev.filter((l) => l.id !== lineId));
-    return true;
-  }, []);
-
   // Stock lines
-  const addStockLine = useCallback(async () => {
+  const addStockLine = useCallback(async (initialFields = {}) => {
     const { data, error } = await supabase
       .from('stock_lines')
-      .insert({ movement_id: id, sort_order: stockLines.length })
+      .insert({ movement_id: id, sort_order: stockLines.length, ...initialFields })
       .select().single();
     if (error) return null;
     setStockLines((prev) => [...prev, data]);
@@ -139,9 +110,8 @@ export function useMovementDetail(id) {
   }, []);
 
   return {
-    movement, costLines, stockLines, releaseOrders, loading, error,
+    movement, stockLines, releaseOrders, loading, error,
     updateMovement,
-    addCostLine, updateCostLine, deleteCostLine,
     addStockLine, updateStockLine, deleteStockLine,
     addReleaseOrder, updateReleaseOrder, deleteReleaseOrder,
     refetch: fetch,

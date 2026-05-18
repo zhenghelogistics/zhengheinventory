@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, FileSpreadsheet, Eye, Trash2, Package, ExternalLink } from 'lucide-react';
 import { useMovements } from '../hooks/useMovements';
-import { fmt, fmtDate, STATUS_COLORS, TYPE_COLORS } from '../utils/movementHelpers';
+import { fmtDate, STATUS_COLORS, TYPE_COLORS } from '../utils/movementHelpers';
 import { exportMovementsExcel } from '../utils/excelExport';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -213,17 +213,13 @@ export default function MovementListPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {['Movement No.', 'Type', 'Status', 'Company', 'Salesperson', 'Date In', 'Date Out', 'Cost (SGD)', 'Sale (SGD)', 'GP%', ''].map((h) => (
+                    {['Movement No.', 'Type', 'Status', 'Company', 'Salesperson', 'Date In', 'Date Out', ''].map((h) => (
                       <th key={h} className="px-4 py-3 text-left font-semibold text-slate-500 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((m) => {
-                    const totalCost = (m.cost_lines || []).reduce((s, l) => s + (Number(l.amount_sgd) || 0), 0);
-                    const sale = Number(m.total_sale) || 0;
-                    const profit = sale - totalCost;
-                    const gp = sale > 0 ? ((profit / sale) * 100).toFixed(1) : '—';
                     return (
                       <tr key={m.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors cursor-pointer ${m.status === 'Voided' ? 'opacity-50' : ''}`} onClick={() => navigate(`/movements/${m.id}`)}>
                         <td className="px-4 py-3 font-mono font-semibold text-blue-700">{m.movement_no || '—'}</td>
@@ -233,9 +229,6 @@ export default function MovementListPage() {
                         <td className="px-4 py-3 text-slate-600">{m.salesperson || '—'}</td>
                         <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{fmtDate(m.date_in)}</td>
                         <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{fmtDate(m.date_out)}</td>
-                        <td className="px-4 py-3 text-slate-700 tabular-nums">{fmt(totalCost)}</td>
-                        <td className="px-4 py-3 text-slate-700 tabular-nums">{fmt(sale)}</td>
-                        <td className={`px-4 py-3 font-semibold tabular-nums ${profit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{gp === '—' ? '—' : `${gp}%`}</td>
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
                             <button onClick={() => navigate(`/movements/${m.id}`)} className="p-1.5 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer" title="View"><Eye size={13} /></button>
