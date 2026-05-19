@@ -64,6 +64,36 @@ const ACTIONS = [
     ),
   },
   {
+    to: '/warehouse/scan-qr',
+    label: 'Scan Client QR',
+    desc: 'Confirm Factor 3 on arrival',
+    color: 'bg-indigo-500',
+    light: 'bg-indigo-50',
+    border: 'border-indigo-200',
+    text: 'text-indigo-700',
+    icon: (
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        <line x1="14" y1="14" x2="14" y2="14"/><line x1="17" y1="14" x2="17" y2="14"/><line x1="20" y1="14" x2="20" y2="14"/>
+        <line x1="14" y1="17" x2="14" y2="17"/><line x1="17" y1="17" x2="20" y2="17"/><line x1="20" y1="20" x2="20" y2="20"/>
+      </svg>
+    ),
+  },
+  {
+    to: '/warehouse/pick-lists',
+    label: 'Pick Lists',
+    desc: 'FIGARO pick execution',
+    color: 'bg-fuchsia-500',
+    light: 'bg-fuchsia-50',
+    border: 'border-fuchsia-200',
+    text: 'text-fuchsia-700',
+    icon: (
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
+    ),
+  },
+  {
     to: '/warehouse/shipments',
     label: 'Shipment Cards',
     desc: 'Add or deduct by shipment',

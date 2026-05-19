@@ -10,6 +10,9 @@ import UpdateStock from './pages/warehouse/UpdateStock';
 import FindItem from './pages/warehouse/FindItem';
 import ShipmentCards from './pages/warehouse/ShipmentCards';
 import ShipmentDetail from './pages/warehouse/ShipmentDetail';
+import ScanClientQR from './pages/warehouse/ScanClientQR';
+import PickListsPage from './pages/warehouse/PickListsPage';
+import PickExecution from './pages/warehouse/PickExecution';
 import ActivityLogPage from './pages/ActivityLogPage';
 import { WarehouseAuthProvider } from './context/WarehouseAuthContext';
 
@@ -94,6 +97,9 @@ export default function App() {
           <Route path="find-item" element={<FindItem />} />
           <Route path="shipments" element={<ShipmentCards />} />
           <Route path="shipments/:id" element={<ShipmentDetail />} />
+          <Route path="scan-qr" element={<ScanClientQR />} />
+          <Route path="pick-lists" element={<PickListsPage />} />
+          <Route path="pick-lists/:id" element={<PickExecution />} />
         </Route>
         <Route path="/*" element={<MainApp />} />
       </Routes>

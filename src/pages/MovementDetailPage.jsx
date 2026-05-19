@@ -7,6 +7,8 @@ import { fmtDate, STATUS_COLORS, TYPE_COLORS } from '../utils/movementHelpers';
 import { exportGRN, exportDO } from '../utils/pdfExports';
 import StockLinesTable from '../components/movement/StockLinesTable';
 import ReleaseOrderTable from '../components/movement/ReleaseOrderTable';
+import ConfirmationPanel from '../components/movement/ConfirmationPanel';
+import PickListPanel from '../components/movement/PickListPanel';
 import Toast from '../components/Toast';
 
 const STATUSES = ['New', 'In Progress', 'Completed', 'Voided'];
@@ -310,6 +312,16 @@ export default function MovementDetailPage() {
               onUpdate={updateReleaseOrder}
               onDelete={deleteReleaseOrder}
             />
+          </Section>
+
+          {/* 3FA Confirmation */}
+          <Section title="3FA Confirmation" defaultOpen={false}>
+            <ConfirmationPanel movement={movement} />
+          </Section>
+
+          {/* FIGARO Pick Lists */}
+          <Section title="Pick Lists (FIGARO)" defaultOpen={false}>
+            <PickListPanel movement={movement} stockLines={stockLines} />
           </Section>
 
 
