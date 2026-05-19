@@ -38,6 +38,8 @@ export default function PickListPanel({ movement, stockLines }) {
   const [selectedLines, setSelectedLines] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const inboundLines = stockLines.filter((l) => l.line_type !== 'Outbound');
 
@@ -87,6 +89,15 @@ export default function PickListPanel({ movement, stockLines }) {
     setSelectedLines([]);
   }
 
+  async function deletePickList(plId) {
+    setDeletingId(plId);
+    await supabase.from('pick_list_items').delete().eq('pick_list_id', plId);
+    await supabase.from('pick_lists').delete().eq('id', plId);
+    setPickLists((prev) => prev.filter((p) => p.id !== plId));
+    setConfirmDeleteId(null);
+    setDeletingId(null);
+  }
+
   async function approvePhoto(pl) {
     setApprovingId(pl.id);
     await supabase
@@ -120,7 +131,35 @@ export default function PickListPanel({ movement, stockLines }) {
                 <span className="text-xs font-bold text-slate-700">Pick List</span>
                 <span className="text-[10px] text-slate-400 font-mono">{pl.id.slice(0, 8)}</span>
               </div>
-              <StatusBadge status={pl.status} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={pl.status} />
+                {confirmDeleteId === pl.id ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-red-600 font-semibold">Delete?</span>
+                    <button
+                      onClick={() => deletePickList(pl.id)}
+                      disabled={deletingId === pl.id}
+                      className="px-2 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold cursor-pointer hover:bg-red-600 disabled:opacity-60"
+                    >
+                      {deletingId === pl.id ? '…' : 'Yes'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="px-2 py-0.5 rounded bg-slate-200 text-slate-600 text-[10px] font-bold cursor-pointer hover:bg-slate-300"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(pl.id)}
+                    className="p-1 rounded hover:bg-red-100 text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+                    title="Delete pick list"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="px-4 py-3 space-y-3">
