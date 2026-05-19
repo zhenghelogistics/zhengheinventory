@@ -384,3 +384,152 @@ export async function exportReleaseOrder(movement, releaseOrder) {
 
   doc.save(`RO-${movement.movement_no.replace('/', '-')}-${(releaseOrder.company_name || 'release').replace(/\s+/g, '-')}.pdf`);
 }
+
+export async function exportPickList(movement, items, signatureData = null, signatureName = null) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const pageH = 297;
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  doc.setFillColor(...PRIMARY);
+  doc.rect(0, 0, W, 18, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+
+  const logo = await loadLogoBase64('/zhl-logo-white.png');
+  if (logo) {
+    doc.addImage(logo, 'PNG', 8, 1.5, 40, 14);
+  } else {
+    doc.setFontSize(11);
+    doc.text(BRAND, 10, 12);
+  }
+
+  doc.setFontSize(10);
+  doc.text('PICK LIST', W - 10, 12, { align: 'right' });
+
+  // ── Movement details ──────────────────────────────────────────────────────
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+
+  const movNo = movement?.movement_no || movement?.movement_number || '—';
+  const company = movement?.company_name || '—';
+  const today = new Date().toLocaleDateString('en-SG');
+
+  doc.text(`Movement No: ${movNo}`, 10, 25);
+  doc.text(`Customer: ${company}`, 10, 30);
+  doc.text(`Date: ${today}`, W - 10, 25, { align: 'right' });
+
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, 34, W - 10, 34);
+
+  // ── Items table ───────────────────────────────────────────────────────────
+  const tableRows = items.map((item) => [
+    item.sku || '—',
+    item.description || '—',
+    item.qty_to_pick ?? '—',
+    item.unit || 'pcs',
+    item.confirm1_by || '—',
+    item.confirm2_by || '—',
+  ]);
+
+  autoTable(doc, {
+    startY: 37,
+    head: [['SKU', 'Description', 'Qty', 'Unit', 'Picked By', 'Checked By']],
+    body: tableRows,
+    theme: 'grid',
+    headStyles: {
+      fillColor: PRIMARY,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    bodyStyles: { fontSize: 8, textColor: [60, 60, 60] },
+    columnStyles: {
+      0: { cellWidth: 28 },
+      2: { cellWidth: 14, halign: 'center' },
+      3: { cellWidth: 14, halign: 'center' },
+      4: { cellWidth: 28 },
+      5: { cellWidth: 28 },
+    },
+    margin: { left: 10, right: 10 },
+  });
+
+  let y = doc.lastAutoTable.finalY + 10;
+
+  // ── Staff section ─────────────────────────────────────────────────────────
+  const picker = items[0]?.confirm1_by || '—';
+  const checker = items[0]?.confirm2_by || '—';
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...PRIMARY);
+  doc.text('STAFF DETAILS', 10, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Picked by: ${picker}`, 10, y);
+  doc.text(`Counter-checked by: ${checker}`, 80, y);
+  y += 10;
+
+  // ── Signature ─────────────────────────────────────────────────────────────
+  if (signatureData) {
+    doc.setDrawColor(200, 200, 200);
+    doc.line(10, y, W - 10, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...PRIMARY);
+    doc.text('CUSTOMER SIGNATURE', 10, y);
+    y += 4;
+
+    try {
+      doc.addImage(signatureData, 'PNG', 10, y, 80, 28);
+    } catch {}
+    y += 30;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(60, 60, 60);
+    if (signatureName) doc.text(`Name: ${signatureName}`, 10, y);
+    doc.text(`Date: ${today}`, 80, y);
+    y += 6;
+  } else {
+    // Blank signature block for preview
+    doc.setDrawColor(200, 200, 200);
+    doc.line(10, y, W - 10, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...PRIMARY);
+    doc.text('CUSTOMER SIGNATURE', 10, y);
+    y += 4;
+
+    doc.setDrawColor(180, 180, 180);
+    doc.rect(10, y, 80, 25);
+    y += 27;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(60, 60, 60);
+    doc.text('Name: ___________________________', 10, y);
+    doc.text(`Date: ${today}`, 100, y);
+    y += 6;
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, pageH - 12, W - 10, pageH - 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(180, 180, 180);
+  doc.text(
+    `${BRAND} · ${movNo} · Generated ${today}`,
+    W / 2, pageH - 7, { align: 'center' }
+  );
+
+  const suffix = signatureData ? 'signed' : 'preview';
+  doc.save(`PickList-${movNo.replace('/', '-')}-${suffix}.pdf`);
+}

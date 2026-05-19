@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
+import { exportPickList } from '../../utils/pdfExports';
 
 // ── Signature canvas ──────────────────────────────────────────────────────────
 function SignaturePad({ onSave, onCancel }) {
@@ -121,6 +122,7 @@ export default function PickExecution() {
   const [saving, setSaving] = useState(false);
   const [photoError, setPhotoError] = useState(null);
   const [showSignature, setShowSignature] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const photoInputRef = useRef(null);
 
   useEffect(() => {
@@ -246,6 +248,19 @@ export default function PickExecution() {
 
     await fetchData();
     setSaving(false);
+
+    // Generate final signed PDF
+    try {
+      await exportPickList(pl?.movements, items, dataUrl, name);
+    } catch {}
+  }
+
+  async function previewPdf() {
+    setGeneratingPdf(true);
+    try {
+      await exportPickList(pl?.movements, items, null, null);
+    } catch {}
+    setGeneratingPdf(false);
   }
 
   if (loading || !pl) return (
@@ -270,7 +285,23 @@ export default function PickExecution() {
         </div>
         <h2 className="text-xl font-black text-slate-800 mb-1">Pick List Complete</h2>
         <p className="text-slate-500 text-sm mb-1">{mv?.company_name} · {mv?.movement_no}</p>
-        <p className="text-xs text-slate-400">Stock deducted automatically (FIGARO)</p>
+        <p className="text-xs text-slate-400 mb-6">Stock deducted automatically (FIGARO)</p>
+        <button
+          onClick={async () => {
+            setGeneratingPdf(true);
+            try { await exportPickList(mv, items, pl.signature_data, pl.signature_name); } catch {}
+            setGeneratingPdf(false);
+          }}
+          disabled={generatingPdf}
+          className="w-full h-12 rounded-2xl bg-white border-2 border-emerald-200 text-emerald-700 font-bold text-sm cursor-pointer active:bg-emerald-50 disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+          </svg>
+          {generatingPdf ? 'Generating…' : 'Download Signed PDF'}
+        </button>
       </div>
     );
   }
@@ -293,6 +324,18 @@ export default function PickExecution() {
           <h3 className="font-bold text-pink-800 text-base mb-1">Customer Signature Required</h3>
           <p className="text-pink-600 text-xs">Hand the tablet to the customer to sign</p>
         </div>
+        <button
+          onClick={previewPdf}
+          disabled={generatingPdf}
+          className="w-full h-12 rounded-2xl bg-white border-2 border-slate-200 text-slate-700 font-bold text-sm cursor-pointer active:bg-slate-50 disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+          </svg>
+          {generatingPdf ? 'Generating…' : 'View Pick List PDF'}
+        </button>
         <button
           onClick={() => setShowSignature(true)}
           disabled={saving}
