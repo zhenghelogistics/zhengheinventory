@@ -122,7 +122,22 @@ export default function PickExecution() {
   const [showSignature, setShowSignature] = useState(false);
   const photoInputRef = useRef(null);
 
-  useEffect(() => { fetchData(); }, [id]);
+  useEffect(() => {
+    fetchData();
+
+    // Realtime: auto-advance when admin changes status (e.g. approves photo)
+    const channel = supabase
+      .channel(`pick_list_exec_${id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'pick_lists',
+        filter: `id=eq.${id}`,
+      }, (payload) => {
+        setPl((prev) => prev ? { ...prev, ...payload.new } : payload.new);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id]);
 
   async function fetchData() {
     const [plRes, itemsRes] = await Promise.all([
@@ -283,13 +298,17 @@ export default function PickExecution() {
             </svg>
           </div>
           <h3 className="font-bold text-orange-800 text-base mb-1">Waiting for Admin</h3>
-          <p className="text-orange-600 text-xs">Photo submitted. Admin must approve before customer can sign.</p>
+          <p className="text-orange-600 text-xs mb-3">Photo submitted. Admin must approve before customer can sign.</p>
+          <div className="flex items-center justify-center gap-1.5 text-orange-500 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+            Listening for approval…
+          </div>
         </div>
         {pl.photo_url && (
           <img src={pl.photo_url} alt="Submitted photo" className="w-full rounded-2xl border border-slate-200 mb-4" />
         )}
-        <button onClick={fetchData} className="w-full py-3 text-sm font-semibold text-slate-500 cursor-pointer">
-          Refresh Status
+        <button onClick={fetchData} className="w-full py-2 text-xs font-semibold text-slate-400 cursor-pointer">
+          Tap to refresh manually
         </button>
       </div>
     );
