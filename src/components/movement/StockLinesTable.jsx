@@ -50,6 +50,9 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete, move
   // Inline adjust state: { lineId, mode: '+' | '-', value, reason, busy }
   const [adjust, setAdjust] = useState(null);
 
+  // Quick update modal: { lineId, mode: '+' | '-', qty: '', reason: '', busy: false }
+  const [modal, setModal] = useState(null);
+
   function startEdit(line) {
     setEditId(line.id);
     setDraft({
@@ -148,6 +151,46 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete, move
     }
 
     setAdjust(null);
+  }
+
+  async function applyModal() {
+    if (!modal || modal.busy) return;
+    const qty = parseFloat(modal.qty);
+    if (!qty || qty <= 0) return;
+    const line = lines.find((l) => l.id === modal.lineId);
+    if (!line) return;
+
+    setModal((m) => ({ ...m, busy: true }));
+
+    if (modal.mode === '+') {
+      const newQty = (Number(line.qty_actual) || 0) + qty;
+      await onUpdate(line.id, { qty_actual: newQty });
+      await logActivity('hive_add_stock', line.id, movementNo, {
+        sku: line.sku, description: line.description,
+        added: qty, qty_before: Number(line.qty_actual) || 0, qty_after: newQty,
+        reason: modal.reason || null,
+      });
+    } else {
+      const outbound = await onAdd({
+        line_type: 'Outbound',
+        sku: line.sku,
+        description: line.description,
+        unit: line.unit,
+        nexus_job_no: line.nexus_job_no || null,
+        qty_out: qty,
+        qty_actual: 0,
+        date_out: new Date().toISOString().slice(0, 10),
+        remarks: modal.reason || null,
+      });
+      if (outbound) {
+        await logActivity('hive_dispatch_stock', line.id, movementNo, {
+          sku: line.sku, description: line.description,
+          dispatched: qty, reason: modal.reason || null,
+        });
+      }
+    }
+
+    setModal(null);
   }
 
   // Split: show inbound/replenishment at top, outbound grouped by SKU for expand
@@ -416,10 +459,122 @@ export default function StockLinesTable({ lines, onAdd, onUpdate, onDelete, move
         </table>
       </div>
 
-      <button onClick={() => onAdd()} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer">
-        <Plus size={13} strokeWidth={2.5} />
-        Add Row
-      </button>
+      <div className="flex items-center gap-2">
+        <button onClick={() => onAdd()} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer">
+          <Plus size={13} strokeWidth={2.5} />
+          Add Row
+        </button>
+        {topLines.length > 0 && (
+          <button
+            onClick={() => setModal({ lineId: topLines[0].id, mode: '+', qty: '', reason: '', busy: false })}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-emerald-200"
+          >
+            <PlusCircle size={13} strokeWidth={2.5} />
+            Update Stock
+          </button>
+        )}
+      </div>
+
+      {/* Quick Update Modal */}
+      {modal && (() => {
+        const selLine = topLines.find((l) => l.id === modal.lineId);
+        const selOutRows = selLine ? (outboundByKey[selLine.sku || selLine.description || String(selLine.id)] || []) : [];
+        const selBal = selLine ? (Number(selLine.qty_actual) || 0) - selOutRows.reduce((s, l) => s + (Number(l.qty_out) || 0), 0) : 0;
+        const qtyNum = parseFloat(modal.qty) || 0;
+        const afterBal = modal.mode === '+' ? selBal + qtyNum : selBal - qtyNum;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-bold text-slate-800 text-base">Update Stock</h3>
+                <button onClick={() => setModal(null)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 cursor-pointer"><X size={16} /></button>
+              </div>
+
+              {/* Add / Deduct toggle */}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <button
+                  onClick={() => setModal((m) => ({ ...m, mode: '+' }))}
+                  className={`h-11 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${modal.mode === '+' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-emerald-50'}`}
+                >
+                  <PlusCircle size={15} /> Add Stock
+                </button>
+                <button
+                  onClick={() => setModal((m) => ({ ...m, mode: '-' }))}
+                  className={`h-11 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${modal.mode === '-' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-red-50'}`}
+                >
+                  <MinusCircle size={15} /> Deduct
+                </button>
+              </div>
+
+              {/* Item dropdown */}
+              <div className="mb-4">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block mb-1">Item</label>
+                <select
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white focus:outline-none focus:border-blue-400 cursor-pointer"
+                  value={modal.lineId}
+                  onChange={(e) => setModal((m) => ({ ...m, lineId: e.target.value }))}
+                >
+                  {topLines.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.description || l.sku || '—'}{l.sku && l.description ? ` (${l.sku})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Quantity */}
+              <div className="mb-4">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block mb-1">Quantity</label>
+                <input
+                  type="number"
+                  autoFocus
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-xl font-bold text-center focus:outline-none focus:border-blue-400"
+                  placeholder="0"
+                  value={modal.qty}
+                  onChange={(e) => setModal((m) => ({ ...m, qty: e.target.value }))}
+                />
+              </div>
+
+              {/* Reason */}
+              <div className="mb-4">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block mb-1">Reason (optional)</label>
+                <input
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:border-blue-400"
+                  placeholder="e.g. damaged, recount"
+                  value={modal.reason}
+                  onChange={(e) => setModal((m) => ({ ...m, reason: e.target.value }))}
+                />
+              </div>
+
+              {/* Balance preview */}
+              {selLine && qtyNum > 0 && (
+                <div className="flex items-center justify-center gap-4 bg-slate-50 rounded-xl py-3 mb-4">
+                  <div className="text-center">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">Balance Now</div>
+                    <div className="text-xl font-black text-slate-700">{selBal}</div>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                  <div className="text-center">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">After</div>
+                    <div className={`text-xl font-black ${afterBal > selBal ? 'text-emerald-600' : afterBal < selBal ? 'text-red-500' : 'text-slate-400'}`}>{afterBal}</div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={applyModal}
+                disabled={modal.busy || !modal.qty || parseFloat(modal.qty) <= 0}
+                className={`w-full h-11 rounded-xl font-bold text-sm text-white cursor-pointer disabled:opacity-50 transition-colors ${modal.mode === '+' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
+              >
+                {modal.busy ? 'Saving…' : modal.mode === '+' ? `Add ${modal.qty || 0} units` : `Deduct ${modal.qty || 0} units`}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

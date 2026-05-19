@@ -63,6 +63,25 @@ const ACTIONS = [
       </svg>
     ),
   },
+  {
+    to: '/warehouse/shipments',
+    label: 'Shipment Cards',
+    desc: 'Add or deduct by shipment',
+    color: 'bg-rose-500',
+    light: 'bg-rose-50',
+    border: 'border-rose-200',
+    text: 'text-rose-700',
+    icon: (
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="3" width="15" height="13"/>
+        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+        <circle cx="5.5" cy="18.5" r="2.5"/>
+        <circle cx="18.5" cy="18.5" r="2.5"/>
+        <line x1="10" y1="9" x2="10" y2="13"/>
+        <line x1="8" y1="11" x2="12" y2="11"/>
+      </svg>
+    ),
+  },
 ];
 
 export default function WarehouseHome() {

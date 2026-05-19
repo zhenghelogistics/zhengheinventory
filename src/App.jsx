@@ -8,6 +8,8 @@ import PickList from './pages/warehouse/PickList';
 import ReceiveDelivery from './pages/warehouse/ReceiveDelivery';
 import UpdateStock from './pages/warehouse/UpdateStock';
 import FindItem from './pages/warehouse/FindItem';
+import ShipmentCards from './pages/warehouse/ShipmentCards';
+import ShipmentDetail from './pages/warehouse/ShipmentDetail';
 import ActivityLogPage from './pages/ActivityLogPage';
 import { WarehouseAuthProvider } from './context/WarehouseAuthContext';
 
@@ -90,6 +92,8 @@ export default function App() {
           <Route path="receive" element={<ReceiveDelivery />} />
           <Route path="update-stock" element={<UpdateStock />} />
           <Route path="find-item" element={<FindItem />} />
+          <Route path="shipments" element={<ShipmentCards />} />
+          <Route path="shipments/:id" element={<ShipmentDetail />} />
         </Route>
         <Route path="/*" element={<MainApp />} />
       </Routes>
