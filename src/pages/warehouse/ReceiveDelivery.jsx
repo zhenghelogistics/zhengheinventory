@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseLog } from '../../hooks/useWarehouseLog';
 
 export default function ReceiveDelivery() {
   const { log } = useWarehouseLog();
+  const navigate = useNavigate();
   const [movements, setMovements] = useState([]);
   const [selected, setSelected] = useState(null);
   const [lines, setLines] = useState([]);
@@ -77,12 +79,24 @@ export default function ReceiveDelivery() {
         </div>
         <p className="font-bold text-slate-800 text-lg">Delivery Confirmed</p>
         <p className="text-slate-500 text-sm mt-1">{selected.movement_number}</p>
-        <button
-          onClick={() => { setSelected(null); setLines([]); setDone(false); }}
-          className="mt-6 px-6 py-3 rounded-xl bg-violet-600 text-white font-semibold cursor-pointer"
-        >
-          Receive Another
-        </button>
+        <div className="mt-6 w-full max-w-xs space-y-3">
+          <button
+            onClick={() => navigate('/warehouse/scan-qr')}
+            className="w-full h-13 py-3 rounded-2xl bg-indigo-600 text-white font-bold flex items-center justify-center gap-2 cursor-pointer active:bg-indigo-700"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+              <line x1="14" y1="14" x2="17" y2="14"/><line x1="20" y1="14" x2="20" y2="14"/><line x1="17" y1="17" x2="20" y2="17"/><line x1="20" y1="20" x2="20" y2="20"/>
+            </svg>
+            Scan Client QR
+          </button>
+          <button
+            onClick={() => { setSelected(null); setLines([]); setDone(false); }}
+            className="w-full py-3 text-sm font-semibold text-slate-500 cursor-pointer"
+          >
+            Receive Another
+          </button>
+        </div>
       </div>
     );
   }
