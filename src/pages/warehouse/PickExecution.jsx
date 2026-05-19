@@ -119,6 +119,7 @@ export default function PickExecution() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [photoError, setPhotoError] = useState(null);
   const [showSignature, setShowSignature] = useState(false);
   const photoInputRef = useRef(null);
 
@@ -169,13 +170,33 @@ export default function PickExecution() {
     const file = e.target.files[0];
     if (!file) return;
     setSaving(true);
-    const path = `${id}/${Date.now()}.jpg`;
-    const { data: uploaded } = await supabase.storage.from('pick-photos').upload(path, file, { contentType: file.type, upsert: true });
-    if (uploaded) {
-      const { data: { publicUrl } } = supabase.storage.from('pick-photos').getPublicUrl(uploaded.path);
-      await supabase.from('pick_lists').update({ photo_url: publicUrl, status: 'Admin Review', updated_at: new Date().toISOString() }).eq('id', id);
-      setPl((p) => ({ ...p, photo_url: publicUrl, status: 'Admin Review' }));
+    setPhotoError(null);
+
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${id}/${Date.now()}.${ext}`;
+    const { data: uploaded, error: uploadErr } = await supabase.storage
+      .from('pick-photos')
+      .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: true });
+
+    if (uploadErr) {
+      setPhotoError(`Upload failed: ${uploadErr.message}`);
+      setSaving(false);
+      return;
     }
+
+    const { data: { publicUrl } } = supabase.storage.from('pick-photos').getPublicUrl(uploaded.path);
+    const { error: updateErr } = await supabase
+      .from('pick_lists')
+      .update({ photo_url: publicUrl, status: 'Admin Review', updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (updateErr) {
+      setPhotoError(`Status update failed: ${updateErr.message}`);
+      setSaving(false);
+      return;
+    }
+
+    setPl((p) => ({ ...p, photo_url: publicUrl, status: 'Admin Review' }));
     setSaving(false);
   }
 
@@ -333,9 +354,15 @@ export default function PickExecution() {
           <p className="text-amber-600 text-xs">Photograph the picked items clearly</p>
         </div>
 
+        {photoError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-xs font-semibold mb-2">
+            {photoError}
+          </div>
+        )}
+
         <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
         <button
-          onClick={() => photoInputRef.current.click()}
+          onClick={() => { setPhotoError(null); photoInputRef.current.click(); }}
           disabled={saving}
           className="w-full h-14 rounded-2xl bg-amber-400 text-white font-bold text-lg cursor-pointer active:bg-amber-500 disabled:opacity-60 flex items-center justify-center gap-2"
         >
