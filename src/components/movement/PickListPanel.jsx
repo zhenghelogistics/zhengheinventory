@@ -35,7 +35,7 @@ export default function PickListPanel({ movement, stockLines }) {
   const [pickLists, setPickLists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [selectedLines, setSelectedLines] = useState([]);
+  const [lineQtys, setLineQtys] = useState({}); // { [lineId]: qty }
   const [showCreate, setShowCreate] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -58,8 +58,10 @@ export default function PickListPanel({ movement, stockLines }) {
     setLoading(false);
   }
 
+  const selectedLineIds = Object.keys(lineQtys);
+
   async function createPickList() {
-    if (!selectedLines.length) return;
+    if (!selectedLineIds.length) return;
     setCreating(true);
 
     const { data: pl } = await supabase
@@ -69,7 +71,7 @@ export default function PickListPanel({ movement, stockLines }) {
       .single();
 
     if (pl) {
-      const items = selectedLines.map((lineId) => {
+      const items = selectedLineIds.map((lineId) => {
         const line = inboundLines.find((l) => l.id === lineId);
         return {
           pick_list_id: pl.id,
@@ -77,7 +79,7 @@ export default function PickListPanel({ movement, stockLines }) {
           sku: line.sku,
           description: line.description,
           unit: line.unit,
-          qty_to_pick: Number(line.qty_actual) || 0,
+          qty_to_pick: parseInt(lineQtys[lineId]) || 0,
         };
       });
       await supabase.from('pick_list_items').insert(items);
@@ -86,7 +88,7 @@ export default function PickListPanel({ movement, stockLines }) {
 
     setCreating(false);
     setShowCreate(false);
-    setSelectedLines([]);
+    setLineQtys({});
   }
 
   async function deletePickList(plId) {
@@ -208,8 +210,8 @@ export default function PickListPanel({ movement, stockLines }) {
       {showCreate ? (
         <div className="border-2 border-blue-200 rounded-xl bg-blue-50/40 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-700">Select stock lines to include</span>
-            <button onClick={() => { setShowCreate(false); setSelectedLines([]); }} className="p-1 hover:bg-slate-100 rounded cursor-pointer text-slate-400">
+            <span className="text-xs font-bold text-slate-700">Select items and set quantities</span>
+            <button onClick={() => { setShowCreate(false); setLineQtys({}); }} className="p-1 hover:bg-slate-100 rounded cursor-pointer text-slate-400">
               <X size={14} />
             </button>
           </div>
@@ -218,32 +220,59 @@ export default function PickListPanel({ movement, stockLines }) {
             <p className="text-xs text-slate-400">No inbound stock lines on this movement.</p>
           ) : (
             <div className="space-y-1.5">
-              {inboundLines.map((line) => (
-                <label key={line.id} className="flex items-center gap-2.5 px-3 py-2.5 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-blue-300 transition-colors">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 accent-blue-600"
-                    checked={selectedLines.includes(line.id)}
-                    onChange={(e) => setSelectedLines((prev) =>
-                      e.target.checked ? [...prev, line.id] : prev.filter((id) => id !== line.id)
+              {inboundLines.map((line) => {
+                const checked = !!lineQtys[line.id];
+                const maxQty = Number(line.qty_actual) || 0;
+                return (
+                  <div
+                    key={line.id}
+                    className={`flex items-center gap-2.5 px-3 py-2.5 bg-white rounded-lg border transition-colors ${checked ? 'border-blue-300 bg-blue-50/40' : 'border-slate-200'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-blue-600 shrink-0 cursor-pointer"
+                      checked={checked}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setLineQtys((prev) => ({ ...prev, [line.id]: maxQty }));
+                        } else {
+                          setLineQtys((prev) => { const n = { ...prev }; delete n[line.id]; return n; });
+                        }
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-slate-700 truncate">{line.description || '—'}</div>
+                      {line.sku && <div className="text-[10px] font-mono text-slate-400">{line.sku}</div>}
+                    </div>
+                    {checked ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <input
+                          type="number"
+                          min="1"
+                          max={maxQty}
+                          className="w-16 px-2 py-1 rounded-lg border border-blue-300 text-xs font-bold text-slate-700 text-center focus:outline-none focus:border-blue-500 bg-white"
+                          value={lineQtys[line.id]}
+                          onChange={(e) => setLineQtys((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-[10px] text-slate-400">{line.unit || 'pcs'}</span>
+                        <span className="text-[10px] text-slate-300">/ {maxQty}</span>
+                      </div>
+                    ) : (
+                      <div className="text-xs font-bold text-slate-300 shrink-0">{maxQty} {line.unit || 'pcs'}</div>
                     )}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-slate-700 truncate">{line.description || '—'}</div>
-                    {line.sku && <div className="text-[10px] font-mono text-slate-400">{line.sku}</div>}
                   </div>
-                  <div className="text-xs font-bold text-violet-600 shrink-0">{Number(line.qty_actual) || 0} {line.unit || 'pcs'}</div>
-                </label>
-              ))}
+                );
+              })}
             </div>
           )}
 
           <button
             onClick={createPickList}
-            disabled={creating || !selectedLines.length}
+            disabled={creating || !selectedLineIds.length}
             className="w-full h-10 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
           >
-            {creating ? 'Creating…' : `Create Pick List (${selectedLines.length} items)`}
+            {creating ? 'Creating…' : `Create Pick List (${selectedLineIds.length} item${selectedLineIds.length !== 1 ? 's' : ''})`}
           </button>
         </div>
       ) : (
