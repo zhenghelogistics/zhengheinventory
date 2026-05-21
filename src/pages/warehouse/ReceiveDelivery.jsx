@@ -55,11 +55,17 @@ export default function ReceiveDelivery() {
 
         // F2 just approved → fetch full record with movement and add/update
         if (updated.factor2_confirmed_at) {
-          const { data } = await supabase
+          const { data: conf } = await supabase
             .from('delivery_confirmations')
-            .select('*, movements!inner(id, movement_no, movement_number, company_name, status, type)')
+            .select('*')
             .eq('id', updated.id)
             .maybeSingle();
+          const { data: mv } = conf ? await supabase
+            .from('movements')
+            .select('id, movement_no, movement_number, company_name, status, type')
+            .eq('id', conf.movement_id)
+            .maybeSingle() : { data: null };
+          const data = conf && mv ? { ...conf, movements: mv } : null;
           if (data) {
             setPendingArrivals((prev) => {
               const exists = prev.find((c) => c.id === data.id);
@@ -83,21 +89,39 @@ export default function ReceiveDelivery() {
 
   async function load() {
     setLoading(true);
-    const [mvRes, confRes] = await Promise.all([
-      supabase
+
+    // Regular inbound movements
+    const { data: mvData } = await supabase
+      .from('movements')
+      .select('id, movement_no, movement_number, company_name, status, type')
+      .in('type', ['Inbound'])
+      .in('status', ['New', 'In Progress'])
+      .order('created_at', { ascending: false });
+    setMovements(mvData || []);
+
+    // Pending 3FA arrivals — two-step to avoid join issues
+    const { data: confs, error: confErr } = await supabase
+      .from('delivery_confirmations')
+      .select('*')
+      .not('factor2_confirmed_at', 'is', null)
+      .is('factor3_confirmed_at', null);
+
+    if (confErr) {
+      console.error('delivery_confirmations query error:', confErr);
+    }
+
+    if (confs && confs.length > 0) {
+      const movIds = confs.map((c) => c.movement_id);
+      const { data: movs } = await supabase
         .from('movements')
-        .select('id, movement_number, movement_no, company_name, status, type')
-        .in('type', ['Inbound'])
-        .in('status', ['New', 'In Progress'])
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('delivery_confirmations')
-        .select('*, movements!inner(id, movement_no, movement_number, company_name, status, type)')
-        .not('factor2_confirmed_at', 'is', null)
-        .is('factor3_confirmed_at', null),
-    ]);
-    setMovements(mvRes.data || []);
-    setPendingArrivals(confRes.data || []);
+        .select('id, movement_no, movement_number, company_name, status, type')
+        .in('id', movIds);
+      const movsById = Object.fromEntries((movs || []).map((m) => [m.id, m]));
+      setPendingArrivals(confs.map((c) => ({ ...c, movements: movsById[c.movement_id] || null })).filter((c) => c.movements));
+    } else {
+      setPendingArrivals([]);
+    }
+
     setLoading(false);
   }
 
