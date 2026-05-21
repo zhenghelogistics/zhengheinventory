@@ -38,6 +38,47 @@ export default function ReceiveDelivery() {
 
   useEffect(() => {
     load();
+
+    const channel = supabase
+      .channel('receive_delivery_3fa')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'delivery_confirmations' }, () => {
+        load();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'delivery_confirmations' }, async (payload) => {
+        const updated = payload.new;
+
+        // F3 just confirmed → remove card
+        if (updated.factor3_confirmed_at) {
+          setPendingArrivals((prev) => prev.filter((c) => c.id !== updated.id));
+          return;
+        }
+
+        // F2 just approved → fetch full record with movement and add/update
+        if (updated.factor2_confirmed_at) {
+          const { data } = await supabase
+            .from('delivery_confirmations')
+            .select('*, movements!inner(id, movement_no, movement_number, company_name, status, type)')
+            .eq('id', updated.id)
+            .maybeSingle();
+          if (data) {
+            setPendingArrivals((prev) => {
+              const exists = prev.find((c) => c.id === data.id);
+              return exists
+                ? prev.map((c) => (c.id === data.id ? data : c))
+                : [data, ...prev];
+            });
+          }
+          return;
+        }
+
+        // F2 rescinded → remove card
+        if (!updated.factor2_confirmed_at) {
+          setPendingArrivals((prev) => prev.filter((c) => c.id !== updated.id));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   async function load() {
