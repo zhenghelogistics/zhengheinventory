@@ -31,6 +31,8 @@ export default function ConfirmationPanel({ movement }) {
   const [conf, setConf] = useState(null);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(false);
+  const [rescinding, setRescinding] = useState(false);
+  const [confirmRescind, setConfirmRescind] = useState(false);
 
   useEffect(() => {
     if (!movement?.id) return;
@@ -49,6 +51,20 @@ export default function ConfirmationPanel({ movement }) {
       .select()
       .single();
     setConf(data);
+  }
+
+  async function rescindApproval() {
+    if (!conf) return;
+    setRescinding(true);
+    const { data } = await supabase
+      .from('delivery_confirmations')
+      .update({ factor2_confirmed_at: null, factor2_user_name: null })
+      .eq('id', conf.id)
+      .select()
+      .single();
+    setConf(data);
+    setConfirmRescind(false);
+    setRescinding(false);
   }
 
   async function approveAdmin() {
@@ -131,7 +147,7 @@ export default function ConfirmationPanel({ movement }) {
           <p className="text-xs text-slate-500 leading-relaxed">
             Print or share this QR code with the client. When they arrive, staff scan it on the Baby App to record Factor 3 confirmation.
           </p>
-          {!conf.factor2_confirmed_at && (
+          {!conf.factor2_confirmed_at ? (
             <button
               onClick={approveAdmin}
               disabled={approving}
@@ -142,6 +158,36 @@ export default function ConfirmationPanel({ movement }) {
               </svg>
               {approving ? 'Approving…' : 'Approve as Admin (Factor 2)'}
             </button>
+          ) : !conf.factor3_confirmed_at && (
+            confirmRescind ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-red-600 font-semibold">Rescind approval?</span>
+                <button
+                  onClick={rescindApproval}
+                  disabled={rescinding}
+                  className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-xs font-bold hover:bg-red-600 disabled:opacity-60 cursor-pointer"
+                >
+                  {rescinding ? '…' : 'Yes, rescind'}
+                </button>
+                <button
+                  onClick={() => setConfirmRescind(false)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmRescind(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-xs font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                  <path d="M3 3v5h5"/>
+                </svg>
+                Rescind Approval
+              </button>
+            )
           )}
         </div>
       </div>
