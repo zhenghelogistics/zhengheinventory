@@ -62,7 +62,7 @@ export default function ReceiveDelivery() {
             .maybeSingle();
           const { data: mv } = conf ? await supabase
             .from('movements')
-            .select('id, movement_no, movement_number, company_name, status, type')
+            .select('id, movement_no, company_name, status, type')
             .eq('id', conf.movement_id)
             .maybeSingle() : { data: null };
           const data = conf && mv ? { ...conf, movements: mv } : null;
@@ -93,7 +93,7 @@ export default function ReceiveDelivery() {
     // Regular inbound movements
     const { data: mvData } = await supabase
       .from('movements')
-      .select('id, movement_no, movement_number, company_name, status, type')
+      .select('id, movement_no, company_name, status, type')
       .in('type', ['Inbound'])
       .in('status', ['New', 'In Progress'])
       .order('created_at', { ascending: false });
@@ -114,7 +114,7 @@ export default function ReceiveDelivery() {
       const movIds = confs.map((c) => c.movement_id);
       const { data: movs } = await supabase
         .from('movements')
-        .select('id, movement_no, movement_number, company_name, status, type')
+        .select('id, movement_no, company_name, status, type')
         .in('id', movIds);
       const movsById = Object.fromEntries((movs || []).map((m) => [m.id, m]));
       setPendingArrivals(confs.map((c) => ({ ...c, movements: movsById[c.movement_id] || null })).filter((c) => c.movements));
@@ -155,7 +155,7 @@ export default function ReceiveDelivery() {
 
   async function confirmAll() {
     setSaving(true);
-    const mvNo = selected.movement_number || selected.movement_no;
+    const mvNo = selected.movement_no;
     for (const line of lines) {
       const qty = parseFloat(drafts[line.id]) || 0;
       await supabase
@@ -188,7 +188,7 @@ export default function ReceiveDelivery() {
           </svg>
         </div>
         <p className="font-bold text-slate-800 text-lg">Delivery Confirmed</p>
-        <p className="text-slate-500 text-sm mt-1">{selected.movement_number || selected.movement_no}</p>
+        <p className="text-slate-500 text-sm mt-1">{selected.movement_no}</p>
         <div className="mt-6 w-full max-w-xs space-y-3">
           <button
             onClick={() => navigate('/warehouse/scan-qr')}
@@ -215,7 +215,7 @@ export default function ReceiveDelivery() {
   if (selectedArrival) {
     const conf = selectedArrival;
     const mv = conf.movements;
-    const mvNo = mv.movement_no || mv.movement_number;
+    const mvNo = mv.movement_no;
     return (
       <div className="px-4 py-5 max-w-lg mx-auto">
         <button
@@ -313,7 +313,7 @@ export default function ReceiveDelivery() {
             </svg>
             Back
           </button>
-          <h2 className="text-lg font-bold text-slate-800">{selected.movement_number || selected.movement_no}</h2>
+          <h2 className="text-lg font-bold text-slate-800">{selected.movement_no}</h2>
           {selected.company_name && <p className="text-slate-500 text-sm">{selected.company_name}</p>}
         </div>
 
@@ -395,7 +395,7 @@ export default function ReceiveDelivery() {
           <div className="space-y-2">
             {pendingArrivals.map((conf) => {
               const mv = conf.movements;
-              const mvNo = mv.movement_no || mv.movement_number;
+              const mvNo = mv.movement_no;
               return (
                 <button
                   key={conf.id}
@@ -443,7 +443,7 @@ export default function ReceiveDelivery() {
             className="w-full bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between active:bg-slate-50 cursor-pointer text-left"
           >
             <div>
-              <div className="font-bold text-slate-800">{mv.movement_number || mv.movement_no}</div>
+              <div className="font-bold text-slate-800">{mv.movement_no}</div>
               {mv.company_name && <div className="text-slate-500 text-sm">{mv.company_name}</div>}
             </div>
             <div className="flex items-center gap-2">
