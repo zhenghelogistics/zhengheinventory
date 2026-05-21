@@ -1,42 +1,89 @@
 import { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
 
+// Inject CSS to strip the library's default ugly UI
+const SCANNER_CSS = `
+  #qr-reader { border: none !important; background: transparent !important; }
+  #qr-reader__header_message { display: none !important; }
+  #qr-reader__status_span { display: none !important; }
+  #qr-reader__dashboard_section_csr button {
+    background: #4f46e5 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 12px 24px !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    width: 100% !important;
+    margin-top: 8px !important;
+  }
+  #qr-reader__dashboard_section_swaplink { display: none !important; }
+  #qr-reader__filescan_input { display: none !important; }
+  #qr-reader__dashboard_section_filesel { display: none !important; }
+  #qr-reader video { border-radius: 16px !important; width: 100% !important; }
+  #qr-reader__scan_region { border-radius: 16px !important; overflow: hidden !important; }
+  #qr-reader__scan_region img { display: none !important; }
+  #qr-reader__dashboard { padding: 8px 0 0 0 !important; }
+`;
+
 export default function ScanClientQR() {
   const { user } = useWarehouseAuth();
-  const scannerRef = useRef(null);
-  const [scanning, setScanning] = useState(true);
-  const [result, setResult] = useState(null); // { movement, conf }
+  const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
+  const scannerRef = useRef(null);
 
   useEffect(() => {
-    const scanner = new Html5Qrcode('qr-reader');
-    scannerRef.current = scanner;
+    // Inject CSS once
+    if (!document.getElementById('qr-scanner-style')) {
+      const style = document.createElement('style');
+      style.id = 'qr-scanner-style';
+      style.textContent = SCANNER_CSS;
+      document.head.appendChild(style);
+    }
 
-    scanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      async (decodedText) => {
-        await scanner.stop();
-        setScanning(false);
-        await handleScan(decodedText);
-      },
-      () => {}
-    ).catch((err) => {
-      setScanning(false);
-      setError('Camera access denied. Please allow camera permission and try again.');
-    });
-
-    return () => {
-      scanner.stop().catch(() => {});
-    };
+    startScanner();
+    return () => stopScanner();
   }, []);
 
+  function startScanner() {
+    if (scannerRef.current) return;
+
+    const scanner = new Html5QrcodeScanner(
+      'qr-reader',
+      {
+        fps: 10,
+        qrbox: { width: 240, height: 240 },
+        supportedScanTypes: [0], // 0 = CAMERA only
+        rememberLastUsedCamera: true,
+        showTorchButtonIfSupported: true,
+      },
+      false
+    );
+
+    scanner.render(
+      async (decodedText) => {
+        stopScanner();
+        await handleScan(decodedText);
+      },
+      () => {} // suppress per-frame errors
+    );
+
+    scannerRef.current = scanner;
+  }
+
+  function stopScanner() {
+    if (scannerRef.current) {
+      scannerRef.current.clear().catch(() => {});
+      scannerRef.current = null;
+    }
+  }
+
   async function handleScan(token) {
-    // Look up movement by client_token
     const { data: movement, error: mvErr } = await supabase
       .from('movements')
       .select('*')
@@ -48,7 +95,6 @@ export default function ScanClientQR() {
       return;
     }
 
-    // Get or create confirmation record
     let { data: conf } = await supabase
       .from('delivery_confirmations')
       .select('*')
@@ -70,16 +116,14 @@ export default function ScanClientQR() {
   async function confirmFactor3() {
     if (!result || confirming) return;
     setConfirming(true);
-    const { data } = await supabase
+    await supabase
       .from('delivery_confirmations')
       .update({
         factor3_confirmed_at: new Date().toISOString(),
         factor3_scanned_by_name: user?.name || 'Warehouse',
         factor3_scanned_by_id: user?.id || null,
       })
-      .eq('id', result.conf.id)
-      .select()
-      .single();
+      .eq('id', result.conf.id);
 
     await supabase.from('warehouse_activity_log').insert({
       user_id: user?.id || null,
@@ -95,25 +139,13 @@ export default function ScanClientQR() {
   }
 
   function reset() {
-    setScanning(true);
     setResult(null);
     setError(null);
     setDone(false);
-
-    const scanner = new Html5Qrcode('qr-reader');
-    scannerRef.current = scanner;
-    scanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      async (decodedText) => {
-        await scanner.stop();
-        setScanning(false);
-        await handleScan(decodedText);
-      },
-      () => {}
-    ).catch(() => setError('Camera access denied.'));
+    setTimeout(() => startScanner(), 100);
   }
 
+  // ── Done ──────────────────────────────────────────────────────────────────
   if (done) {
     return (
       <div className="px-4 py-10 max-w-sm mx-auto text-center">
@@ -123,16 +155,17 @@ export default function ScanClientQR() {
           </svg>
         </div>
         <h2 className="text-xl font-black text-slate-800 mb-1">Factor 3 Confirmed</h2>
-        <p className="text-slate-500 text-sm mb-2">{result.movement.company_name || 'Client'} · {result.movement.movement_no}</p>
-        <p className="text-xs text-slate-400 mb-6">Client QR scanned and recorded by <strong>{user?.name}</strong></p>
-        <button onClick={reset} className="w-full h-12 rounded-2xl bg-blue-600 text-white font-bold cursor-pointer">
+        <p className="text-slate-500 text-sm mb-2">{result.movement.company_name} · {result.movement.movement_no}</p>
+        <p className="text-xs text-slate-400 mb-6">Client QR scanned by <strong>{user?.name}</strong></p>
+        <button onClick={reset} className="w-full h-12 rounded-2xl bg-blue-600 text-white font-bold cursor-pointer active:bg-blue-700">
           Scan Another
         </button>
       </div>
     );
   }
 
-  if (result && result.conf) {
+  // ── Scan result — confirm F3 ───────────────────────────────────────────────
+  if (result) {
     const { movement, conf } = result;
     const f3Already = !!conf.factor3_confirmed_at;
 
@@ -149,7 +182,7 @@ export default function ScanClientQR() {
               { label: 'Client QR (F3)', at: conf.factor3_confirmed_at, by: conf.factor3_scanned_by_name },
             ].map(({ label, at, by }) => (
               <div key={label} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${at ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-400'}`}>
-                <div className={`w-4 h-4 rounded-full flex items-center justify-center ${at ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${at ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                   {at && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
                 <span className="font-semibold">{label}</span>
@@ -172,7 +205,6 @@ export default function ScanClientQR() {
             </button>
           )}
         </div>
-
         <button onClick={reset} className="w-full py-3 text-sm text-slate-500 font-semibold cursor-pointer">
           Scan a different QR
         </button>
@@ -180,11 +212,12 @@ export default function ScanClientQR() {
     );
   }
 
+  // ── Scanner UI ────────────────────────────────────────────────────────────
   return (
     <div className="px-4 py-5 max-w-sm mx-auto">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-slate-800">Scan Client QR</h2>
-        <p className="text-slate-500 text-xs mt-0.5">Point camera at the client's QR code</p>
+        <p className="text-slate-500 text-xs mt-0.5">Point the camera at the client's QR code</p>
       </div>
 
       {error ? (
@@ -195,14 +228,14 @@ export default function ScanClientQR() {
           </button>
         </div>
       ) : (
-        <div className="bg-black rounded-2xl overflow-hidden">
+        <div className="rounded-2xl overflow-hidden bg-black">
           <div id="qr-reader" className="w-full" />
         </div>
       )}
 
-      {scanning && !error && (
-        <p className="text-center text-xs text-slate-400 mt-3">Align QR code within the frame</p>
-      )}
+      <p className="text-center text-xs text-slate-400 mt-3">
+        Tap "Start Scanning" then allow camera access
+      </p>
     </div>
   );
 }

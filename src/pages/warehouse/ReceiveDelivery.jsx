@@ -143,12 +143,12 @@ export default function ReceiveDelivery() {
   async function selectArrival(conf) {
     setSelectedArrival(conf);
     setArrivalLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('stock_lines')
       .select('*')
-      .eq('movement_id', conf.movements.id)
-      .in('line_type', ['Inbound', 'Replenishment'])
+      .eq('movement_id', conf.movement_id)
       .order('created_at');
+    if (error) console.error('stock_lines fetch error:', error);
     setArrivalLines(data || []);
     setArrivalLoading(false);
   }
@@ -267,9 +267,16 @@ export default function ReceiveDelivery() {
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-slate-800 text-sm truncate">{line.description || '—'}</div>
                     {line.sku && <div className="text-[10px] font-mono text-slate-400">{line.sku}</div>}
+                    <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                      line.line_type === 'Outbound' ? 'bg-rose-100 text-rose-600' :
+                      line.line_type === 'Replenishment' ? 'bg-blue-100 text-blue-600' :
+                      'bg-violet-100 text-violet-600'
+                    }`}>{line.line_type}</span>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-lg font-black text-slate-700 tabular-nums">{line.qty_actual ?? '—'}</div>
+                    <div className="text-lg font-black text-slate-700 tabular-nums">
+                      {line.line_type === 'Outbound' ? (line.qty_out ?? '—') : (line.qty_actual ?? '—')}
+                    </div>
                     <div className="text-[10px] text-slate-400">{line.unit || 'pcs'}</div>
                   </div>
                 </div>
