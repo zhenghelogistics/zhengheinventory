@@ -58,9 +58,10 @@ export default function ScanClientQR() {
       {
         fps: 10,
         qrbox: { width: 240, height: 240 },
-        supportedScanTypes: [0], // 0 = CAMERA only
+        supportedScanTypes: [0],
         rememberLastUsedCamera: true,
         showTorchButtonIfSupported: true,
+        videoConstraints: { facingMode: 'environment' },
       },
       false
     );
