@@ -51,7 +51,7 @@ export default function ReceiveDelivery() {
         .order('created_at', { ascending: false }),
       supabase
         .from('delivery_confirmations')
-        .select('*, movements!inner(id, movement_no, movement_number, company_name, status, type, carrier_name, driver_name)')
+        .select('*, movements!inner(id, movement_no, movement_number, company_name, status, type)')
         .not('factor2_confirmed_at', 'is', null)
         .is('factor3_confirmed_at', null),
     ]);
@@ -151,8 +151,6 @@ export default function ReceiveDelivery() {
     const conf = selectedArrival;
     const mv = conf.movements;
     const mvNo = mv.movement_no || mv.movement_number;
-    const carrier = mv.carrier_name || mv.driver_name || null;
-
     return (
       <div className="px-4 py-5 max-w-lg mx-auto">
         <button
@@ -171,7 +169,6 @@ export default function ReceiveDelivery() {
             <div>
               <div className="font-mono font-bold text-slate-800 text-base">{mvNo}</div>
               <div className="font-semibold text-slate-700 text-sm">{mv.company_name || '—'}</div>
-              {carrier && <div className="text-xs text-slate-500 mt-0.5">Driver / Carrier: {carrier}</div>}
             </div>
             <span className="shrink-0 text-[10px] font-bold px-2 py-1 rounded-full bg-amber-200 text-amber-800">
               QR Sent
@@ -304,9 +301,21 @@ export default function ReceiveDelivery() {
   // ── Main list ─────────────────────────────────────────────────────────────
   return (
     <div className="px-4 py-5 max-w-lg mx-auto">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-slate-800">Receive Delivery</h2>
-        <p className="text-slate-500 text-xs mt-0.5">Select the inbound movement to receive</p>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Receive Delivery</h2>
+          <p className="text-slate-500 text-xs mt-0.5">Select the inbound movement to receive</p>
+        </div>
+        <button
+          onClick={load}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold active:bg-slate-200 cursor-pointer"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          Refresh
+        </button>
       </div>
 
       {/* Pending arrivals — 3FA active */}
@@ -322,7 +331,6 @@ export default function ReceiveDelivery() {
             {pendingArrivals.map((conf) => {
               const mv = conf.movements;
               const mvNo = mv.movement_no || mv.movement_number;
-              const carrier = mv.carrier_name || mv.driver_name || null;
               return (
                 <button
                   key={conf.id}
@@ -332,7 +340,6 @@ export default function ReceiveDelivery() {
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-slate-800">{mvNo}</div>
                     <div className="text-slate-600 text-sm font-semibold">{mv.company_name || '—'}</div>
-                    {carrier && <div className="text-xs text-slate-500 mt-0.5">{carrier}</div>}
                     <div className="flex items-center gap-2 mt-2">
                       <FactorPip n={1} done={!!conf.factor1_confirmed_at} />
                       <div className="text-slate-300 text-xs">·</div>
