@@ -2,9 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 const ACTION_META = {
-  pick_item:        { label: 'Pick',           color: 'bg-orange-100 text-orange-700' },
-  receive_delivery: { label: 'Receive',         color: 'bg-violet-100 text-violet-700' },
-  update_stock:     { label: 'Stock Update',    color: 'bg-emerald-100 text-emerald-700' },
+  pick_item:          { label: 'Pick',           color: 'bg-orange-100 text-orange-700' },
+  receive_delivery:   { label: 'Receive',         color: 'bg-violet-100 text-violet-700' },
+  update_stock:       { label: 'Stock Update',    color: 'bg-emerald-100 text-emerald-700' },
+  figaro_complete:    { label: 'FIGARO',          color: 'bg-fuchsia-100 text-fuchsia-700' },
+  scan_client_qr:     { label: 'QR Scan',         color: 'bg-indigo-100 text-indigo-700' },
+  hive_dispatch_stock:{ label: 'Dispatch',        color: 'bg-rose-100 text-rose-700' },
+  hive_add_stock:     { label: 'Add Stock',       color: 'bg-emerald-100 text-emerald-700' },
+  hive_update_stock:  { label: 'Stock Update',    color: 'bg-emerald-100 text-emerald-700' },
 };
 
 function fmtTs(ts) {
@@ -19,24 +24,75 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function DetailsCell({ details, action }) {
-  if (!details || Object.keys(details).length === 0) return <span className="text-slate-400">—</span>;
+function Dot() { return <span className="text-slate-300 mx-1">·</span>; }
+
+function DetailsCell({ details: d, action }) {
+  if (!d || Object.keys(d).length === 0) return <span className="text-slate-400">—</span>;
+
+  const item = d.description || d.sku || null;
+  const sku  = d.description && d.sku ? <span className="font-mono text-slate-400">{d.sku}</span> : null;
+
   if (action === 'pick_item') {
-    return <span>{details.description || details.sku || '—'} &mdash; Qty: <b>{details.qty}</b></span>;
+    return <span>{item}<Dot/>Qty picked: <b>{d.qty}</b>{d.remarks ? <><Dot/><span className="text-slate-400">{d.remarks}</span></> : null}</span>;
   }
   if (action === 'receive_delivery') {
-    return <span>{details.description || details.sku || '—'} &mdash; Confirmed: <b>{details.qty_confirmed}</b></span>;
+    return <span>{item}{sku ? <><Dot/>{sku}</> : null}<Dot/>Received: <b>{d.qty_confirmed}</b></span>;
   }
-  if (action === 'update_stock') {
-    const sign = details.change > 0 ? '+' : '';
+  if (action === 'update_stock' || action === 'hive_update_stock') {
+    const sign = d.change > 0 ? '+' : '';
     return (
       <span>
-        {details.reason ? <><span className="text-slate-400">{details.reason}</span> &middot; </> : null}
-        <b>{sign}{details.change}</b> ({details.qty_before} → {details.qty_after})
+        {item ? <>{item}<Dot/></> : null}
+        {d.reason ? <><span className="text-slate-400">{d.reason}</span><Dot/></> : null}
+        <b className={d.change > 0 ? 'text-emerald-600' : 'text-rose-600'}>{sign}{d.change}</b>
+        <span className="text-slate-400"> ({d.qty_before} → {d.qty_after})</span>
       </span>
     );
   }
-  return <span className="text-slate-400 font-mono text-[10px]">{JSON.stringify(details)}</span>;
+  if (action === 'hive_dispatch_stock') {
+    return (
+      <span>
+        {item}<Dot/>
+        {sku ? <>{sku}<Dot/></> : null}
+        Dispatched: <b className="text-rose-600">{d.dispatched}</b>
+      </span>
+    );
+  }
+  if (action === 'hive_add_stock') {
+    return (
+      <span>
+        {item}<Dot/>
+        {sku ? <>{sku}<Dot/></> : null}
+        Added: <b className="text-emerald-600">+{d.added}</b>
+        <span className="text-slate-400"> ({d.qty_before} → {d.qty_after})</span>
+      </span>
+    );
+  }
+  if (action === 'figaro_complete') {
+    return (
+      <span>
+        <b>{d.items}</b> item{d.items !== 1 ? 's' : ''} picked
+        {d.signed_by ? <><Dot/>Signed by <b>{d.signed_by}</b></> : null}
+      </span>
+    );
+  }
+  if (action === 'scan_client_qr') {
+    return (
+      <span>
+        {d.company ? <><b>{d.company}</b><Dot/></> : null}
+        {d.movement_no || '—'}
+        <Dot/><span className="text-indigo-600 font-semibold">Factor 3 confirmed</span>
+      </span>
+    );
+  }
+  // Fallback — render key: value pairs instead of raw JSON
+  return (
+    <span className="text-slate-500">
+      {Object.entries(d).map(([k, v], i) => (
+        <span key={k}>{i > 0 ? <Dot/> : null}{k}: <b>{String(v)}</b></span>
+      ))}
+    </span>
+  );
 }
 
 export default function ActivityLogPage() {
