@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
@@ -7,12 +7,30 @@ import { exportPickList } from '../../utils/pdfExports';
 // ── Signature canvas ──────────────────────────────────────────────────────────
 function SignaturePad({ onSave, onCancel }) {
   const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
   const drawing = useRef(false);
+  const lastPos = useRef(null);
+  const dpr = useRef(1);
   const [hasStrokes, setHasStrokes] = useState(false);
   const [name, setName] = useState('');
 
-  function getPos(e, canvas) {
-    const rect = canvas.getBoundingClientRect();
+  // Set canvas pixel dimensions to exactly match rendered size × devicePixelRatio
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    const wrap = wrapRef.current;
+    if (!canvas || !wrap) return;
+
+    dpr.current = window.devicePixelRatio || 1;
+    const { width, height } = wrap.getBoundingClientRect();
+    canvas.width = Math.round(width * dpr.current);
+    canvas.height = Math.round(height * dpr.current);
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr.current, dpr.current);
+  }, []);
+
+  function getPos(e) {
+    const rect = canvasRef.current.getBoundingClientRect();
     const src = e.touches ? e.touches[0] : e;
     return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   }
@@ -20,28 +38,32 @@ function SignaturePad({ onSave, onCancel }) {
   function start(e) {
     e.preventDefault();
     drawing.current = true;
+    const pos = getPos(e);
+    lastPos.current = pos;
     const ctx = canvasRef.current.getContext('2d');
-    const { x, y } = getPos(e, canvasRef.current);
     ctx.beginPath();
-    ctx.moveTo(x, y);
+    ctx.moveTo(pos.x, pos.y);
   }
 
   function move(e) {
     e.preventDefault();
     if (!drawing.current) return;
+    const pos = getPos(e);
     const ctx = canvasRef.current.getContext('2d');
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = '#1e3a8a';
-    const { x, y } = getPos(e, canvasRef.current);
-    ctx.lineTo(x, y);
+    ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
+    lastPos.current = pos;
     setHasStrokes(true);
   }
 
   function end(e) {
     e.preventDefault();
     drawing.current = false;
+    lastPos.current = null;
   }
 
   function clear() {
@@ -56,57 +78,66 @@ function SignaturePad({ onSave, onCancel }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
-      <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
         <div>
           <h3 className="font-bold text-slate-800 text-base">Customer Signature</h3>
-          <p className="text-xs text-slate-500">Sign in the box below</p>
+          <p className="text-xs text-slate-400 mt-0.5">Type name, then sign in the box</p>
         </div>
-        <button onClick={onCancel} className="p-2 rounded-xl bg-slate-100 text-slate-500 cursor-pointer">
+        <button onClick={onCancel} className="p-2 rounded-xl bg-slate-100 text-slate-500 cursor-pointer active:bg-slate-200">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col px-4 py-4 gap-4">
+      {/* Name input */}
+      <div className="px-4 pt-4 pb-2 shrink-0">
         <input
           className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-800 font-semibold text-sm focus:outline-none focus:border-blue-400"
           placeholder="Customer full name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
+      </div>
 
-        <div className="flex-1 relative border-2 border-slate-300 rounded-2xl bg-slate-50 overflow-hidden">
-          <canvas
-            ref={canvasRef}
-            width={window.innerWidth - 40}
-            height={300}
-            className="touch-none w-full h-full"
-            onMouseDown={start} onMouseMove={move} onMouseUp={end}
-            onTouchStart={start} onTouchMove={move} onTouchEnd={end}
-          />
-          <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none">
-            <div className="w-32 border-b border-dashed border-slate-300" />
+      {/* Canvas — takes all remaining space */}
+      <div
+        ref={wrapRef}
+        className="flex-1 mx-4 mb-2 relative bg-slate-50 rounded-2xl border-2 border-slate-200 overflow-hidden"
+        style={{ minHeight: 0 }}
+      >
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', height: '100%', display: 'block' }}
+          className="touch-none"
+          onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
+          onTouchStart={start} onTouchMove={move} onTouchEnd={end}
+        />
+        {/* Signature baseline */}
+        <div className="absolute left-8 right-8 pointer-events-none" style={{ bottom: '28%' }}>
+          <div className="border-b-2 border-dashed border-slate-300" />
+          <p className="text-[10px] text-slate-300 mt-1 text-center">Sign above this line</p>
+        </div>
+        {!hasStrokes && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ paddingBottom: '10%' }}>
+            <span className="text-slate-300 text-base font-medium">Sign here</span>
           </div>
-          {!hasStrokes && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-slate-300 text-sm font-medium">Sign here</span>
-            </div>
-          )}
-        </div>
+        )}
+      </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={clear} className="h-12 rounded-xl bg-slate-100 text-slate-600 font-bold cursor-pointer active:bg-slate-200">
-            Clear
-          </button>
-          <button
-            onClick={save}
-            disabled={!hasStrokes || !name.trim()}
-            className="h-12 rounded-xl bg-blue-600 text-white font-bold cursor-pointer disabled:opacity-50 active:bg-blue-700"
-          >
-            Confirm Signature
-          </button>
-        </div>
+      {/* Buttons */}
+      <div className="grid grid-cols-2 gap-3 px-4 pb-6 pt-2 shrink-0">
+        <button onClick={clear} className="h-13 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold cursor-pointer active:bg-slate-200">
+          Clear
+        </button>
+        <button
+          onClick={save}
+          disabled={!hasStrokes || !name.trim()}
+          className="h-13 py-3.5 rounded-xl bg-blue-600 text-white font-bold cursor-pointer disabled:opacity-50 active:bg-blue-700"
+        >
+          Confirm Signature
+        </button>
       </div>
     </div>
   );
