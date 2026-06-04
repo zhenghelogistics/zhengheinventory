@@ -5,33 +5,83 @@
   --font-mono: 'Fira Code', ui-monospace, monospace;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   font-family: var(--font-sans);
   background-color: #F8FAFC;
   margin: 0;
+  transition: background-color 0.2s;
 }
 
-/* Mono numerics in table cells */
+/* ── Dark mode ───────────────────────────────────────────────────────────────
+   CSS-override approach: target .dark ancestor so every component gets
+   dark styles without touching each file individually.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.dark body,
+html.dark { background-color: #0f172a; color-scheme: dark; }
+
+/* Backgrounds */
+.dark .bg-white          { background-color: #1e293b !important; }
+.dark .bg-slate-50       { background-color: #0f172a !important; }
+.dark .bg-slate-100      { background-color: #1e293b !important; }
+.dark .bg-slate-200      { background-color: #334155 !important; }
+.dark .bg-white\/80      { background-color: rgba(30,41,59,0.8) !important; }
+
+/* Text */
+.dark .text-slate-800    { color: #f1f5f9 !important; }
+.dark .text-slate-700    { color: #e2e8f0 !important; }
+.dark .text-slate-600    { color: #cbd5e1 !important; }
+.dark .text-slate-500    { color: #94a3b8 !important; }
+.dark .text-slate-400    { color: #64748b !important; }
+.dark .text-slate-300    { color: #475569 !important; }
+
+/* Borders */
+.dark .border-slate-200  { border-color: #334155 !important; }
+.dark .border-slate-100  { border-color: #1e293b !important; }
+.dark .border-slate-300  { border-color: #475569 !important; }
+.dark .divide-slate-100 > * + * { border-color: #1e293b !important; }
+.dark .divide-slate-200 > * + * { border-color: #334155 !important; }
+
+/* Hover states */
+.dark .hover\:bg-slate-50:hover  { background-color: #1e293b !important; }
+.dark .hover\:bg-slate-100:hover { background-color: #334155 !important; }
+.dark .active\:bg-slate-50:active  { background-color: #1e293b !important; }
+.dark .active\:bg-slate-200:active { background-color: #334155 !important; }
+
+/* Inputs, textareas, selects */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.dark textarea,
+.dark select {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: #475569 !important; }
+
+/* Tables */
+.dark .bg-slate-50.border-b { background-color: #1e293b !important; }
+.dark tbody tr:hover { background-color: #1e293b !important; }
+
+/* Shadows — soften in dark mode */
+.dark .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
+.dark .shadow-2xl { box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important; }
+
+/* Scrollbar in dark mode */
+.dark .table-scroll::-webkit-scrollbar-track { background: #1e293b; }
+.dark .table-scroll::-webkit-scrollbar-thumb { background: #475569; }
+.dark .table-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* Mono numerics */
 .tabular-nums {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
-/* Smooth scrollbar for table */
-.table-scroll::-webkit-scrollbar {
-  height: 6px;
-}
-.table-scroll::-webkit-scrollbar-track {
-  background: #F1F5F9;
-}
-.table-scroll::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 3px;
-}
-.table-scroll::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
-}
+/* Scrollbar (light) */
+.table-scroll::-webkit-scrollbar { height: 6px; }
+.table-scroll::-webkit-scrollbar-track { background: #F1F5F9; }
+.table-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+.table-scroll::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
