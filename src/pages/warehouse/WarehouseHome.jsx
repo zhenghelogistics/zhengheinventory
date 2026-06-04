@@ -19,21 +19,6 @@ const ACTIONS = [
     ),
   },
   {
-    to: '/warehouse/update-stock',
-    label: 'Update Stock',
-    desc: 'Adjust item quantities',
-    color: 'bg-emerald-500',
-    light: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    text: 'text-emerald-700',
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19"/>
-        <line x1="5" y1="12" x2="19" y2="12"/>
-      </svg>
-    ),
-  },
-  {
     to: '/warehouse/find-item',
     label: 'Find Item',
     desc: 'Look up SKU or item',

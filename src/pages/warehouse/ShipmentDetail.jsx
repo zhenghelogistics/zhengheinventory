@@ -22,6 +22,7 @@ export default function ShipmentDetail() {
 
   // stepper: { lineId, mode: '+' | '-', qty: number }
   const [stepper, setStepper] = useState(null);
+  const [reason, setReason] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [flashId, setFlashId] = useState(null);
 
@@ -38,6 +39,7 @@ export default function ShipmentDetail() {
 
   async function confirmStepper() {
     if (!stepper || stepper.qty === 0 || confirming) return;
+    if (stepper.mode === '-' && !reason.trim()) return;
     const line = topLines.find((l) => l.id === stepper.lineId);
     if (!line) return;
 
@@ -50,6 +52,7 @@ export default function ShipmentDetail() {
         added: stepper.qty,
         qty_before: Number(line.qty_actual) || 0,
         qty_after: newQty,
+        reason: reason.trim() || null,
       }, user);
     } else {
       const outbound = await addStockLine({
@@ -61,11 +64,13 @@ export default function ShipmentDetail() {
         qty_out: stepper.qty,
         qty_actual: 0,
         date_out: new Date().toISOString().slice(0, 10),
+        remarks: reason.trim(),
       });
       if (outbound) {
         await logActivity('hive_dispatch_stock', line.id, movement.movement_no, {
           sku: line.sku, description: line.description,
           dispatched: stepper.qty,
+          reason: reason.trim(),
         }, user);
       }
     }
@@ -74,6 +79,7 @@ export default function ShipmentDetail() {
     setTimeout(() => setFlashId(null), 1500);
     setConfirming(false);
     setStepper(null);
+    setReason('');
   }
 
   if (loading || !movement) return (
@@ -158,7 +164,7 @@ export default function ShipmentDetail() {
       {/* Stepper bottom sheet */}
       {stepper && activeLine && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/50" onClick={() => !confirming && setStepper(null)} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => { if (!confirming) { setStepper(null); setReason(''); } }} />
           <div className="relative bg-white rounded-t-3xl px-5 pt-6 pb-8 shadow-2xl">
             {/* Handle bar */}
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
@@ -222,10 +228,30 @@ export default function ShipmentDetail() {
               <div className="text-slate-400 text-sm">{activeLine.unit || 'pcs'}</div>
             </div>
 
+            {/* Reason input */}
+            <div className="mb-4">
+              <label className="text-xs font-semibold text-slate-500 block mb-1.5">
+                {stepper.mode === '-' ? 'Reason for deduction *' : 'Reason (optional)'}
+              </label>
+              <input
+                className={`w-full px-4 py-3 rounded-xl border-2 text-slate-800 text-sm focus:outline-none ${
+                  stepper.mode === '-' && !reason.trim()
+                    ? 'border-red-200 focus:border-red-400 bg-red-50/30'
+                    : 'border-slate-200 focus:border-blue-400'
+                }`}
+                placeholder={stepper.mode === '-' ? 'e.g. Forklift damaged 10 units' : 'e.g. Replenishment from supplier'}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+              {stepper.mode === '-' && !reason.trim() && (
+                <p className="text-[10px] text-red-500 font-semibold mt-1">Required before deducting stock</p>
+              )}
+            </div>
+
             {/* Confirm button */}
             <button
               onClick={confirmStepper}
-              disabled={confirming || stepper.qty === 0}
+              disabled={confirming || stepper.qty === 0 || (stepper.mode === '-' && !reason.trim())}
               className={`w-full h-14 rounded-2xl font-bold text-lg text-white disabled:opacity-50 cursor-pointer transition-colors ${stepper.mode === '+' ? 'bg-emerald-500 active:bg-emerald-600' : 'bg-red-500 active:bg-red-600'}`}
             >
               {confirming ? 'Saving…' : `Confirm ${stepper.mode === '+' ? `+${stepper.qty}` : `-${stepper.qty}`} ${activeLine.unit || 'pcs'}`}
