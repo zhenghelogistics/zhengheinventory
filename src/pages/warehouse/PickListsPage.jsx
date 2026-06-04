@@ -113,7 +113,7 @@ export default function PickListsPage() {
         <div className="text-center py-16 text-slate-400 text-sm">
           Nothing for you right now
           <br />
-          <span className="text-xs text-slate-300">New tasks will appear here automatically</span>
+          <span className="text-xs text-slate-300">Admin creates tasks from Hive — they appear here automatically</span>
         </div>
       ) : (
         <div className="space-y-3">

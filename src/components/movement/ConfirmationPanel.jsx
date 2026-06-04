@@ -164,7 +164,7 @@ export default function ConfirmationPanel({ movement }) {
 
         <div className="flex-1 space-y-2">
           <p className="text-xs text-slate-500 leading-relaxed">
-            Share this QR PDF with the client. When they arrive, staff scan it on the Mobile App to record Factor 3 confirmation.
+            Share this QR PDF with the client. When they arrive, staff scan it on Brood to record Factor 3 confirmation.
           </p>
 
           {/* QR PDF download — always available */}

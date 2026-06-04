@@ -31,7 +31,7 @@ export default function WarehouseLayout() {
             <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
             <line x1="12" y1="22.08" x2="12" y2="12"/>
           </svg>
-          <span className="text-white font-bold text-sm">Warehouse</span>
+          <span className="text-white font-bold text-sm">Brood</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-blue-100 text-sm font-medium">{user.name}</span>
