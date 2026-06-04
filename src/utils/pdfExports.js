@@ -533,3 +533,167 @@ export async function exportPickList(movement, items, signatureData = null, sign
   const suffix = signatureData ? 'signed' : 'preview';
   doc.save(`PickList-${movNo.replace('/', '-')}-${suffix}.pdf`);
 }
+
+// ── Inbound Confirmation QR PDF ───────────────────────────────────────────────
+export async function exportInboundQR(movement, qrDataUrl) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const pageH = 297;
+  const today = new Date().toLocaleDateString('en-SG');
+  const movNo = movement?.movement_no || '—';
+
+  // Header
+  doc.setFillColor(...PRIMARY);
+  doc.rect(0, 0, W, 18, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  const logo = await loadLogoBase64('/zhl-logo-white.png');
+  if (logo) doc.addImage(logo, 'PNG', 8, 1.5, 40, 14);
+  else { doc.setFontSize(11); doc.text(BRAND, 10, 12); }
+  doc.setFontSize(10);
+  doc.text('INBOUND DELIVERY QR', W - 10, 12, { align: 'right' });
+
+  // Movement details
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text(`Movement No: ${movNo}`, 10, 28);
+  if (movement?.company_name) doc.text(`Customer: ${movement.company_name}`, 10, 34);
+  doc.text(`Date: ${today}`, W - 10, 28, { align: 'right' });
+
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, 39, W - 10, 39);
+
+  // QR code centred
+  if (qrDataUrl) {
+    const qrSize = 80;
+    const qrX = (W - qrSize) / 2;
+    doc.addImage(qrDataUrl, 'PNG', qrX, 48, qrSize, qrSize);
+  }
+
+  // Instructions
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...PRIMARY);
+  doc.text('Please present this QR code upon arrival', W / 2, 140, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  const instructions = [
+    'Hand this document to the Zhenghe Logistics ground team when you arrive.',
+    'Staff will scan the QR code to complete the inbound delivery confirmation.',
+  ];
+  instructions.forEach((line, i) => {
+    doc.text(line, W / 2, 150 + i * 7, { align: 'center' });
+  });
+
+  // Box around QR
+  doc.setDrawColor(...PRIMARY);
+  doc.setLineWidth(0.5);
+  doc.roundedRect((W - 86) / 2, 44, 86, 86, 3, 3);
+  doc.setLineWidth(0.2);
+
+  // Footer
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, pageH - 12, W - 10, pageH - 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(180, 180, 180);
+  doc.text(`${BRAND} · ${movNo} · Generated ${today}`, W / 2, pageH - 7, { align: 'center' });
+
+  doc.save(`QR-${movNo.replace('/', '-')}.pdf`);
+}
+
+// ── Inbound Confirmation Record PDF ──────────────────────────────────────────
+export async function exportInboundConfirmation(movement, conf, signatureData = null, signatureName = null) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const pageH = 297;
+  const today = new Date().toLocaleDateString('en-SG');
+  const movNo = movement?.movement_no || '—';
+
+  function fmtFactor(at, by) {
+    if (!at) return 'Pending';
+    const d = new Date(at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return by ? `${by} · ${d}` : d;
+  }
+
+  // Header
+  doc.setFillColor(...PRIMARY);
+  doc.rect(0, 0, W, 18, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  const logo = await loadLogoBase64('/zhl-logo-white.png');
+  if (logo) doc.addImage(logo, 'PNG', 8, 1.5, 40, 14);
+  else { doc.setFontSize(11); doc.text(BRAND, 10, 12); }
+  doc.setFontSize(10);
+  doc.text('INBOUND CONFIRMATION', W - 10, 12, { align: 'right' });
+
+  // Movement details
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`Movement No: ${movNo}`, 10, 26);
+  if (movement?.company_name) doc.text(`Customer: ${movement.company_name}`, 10, 31);
+  doc.text(`Printed: ${today}`, W - 10, 26, { align: 'right' });
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, 36, W - 10, 36);
+
+  // Factor confirmation table
+  autoTable(doc, {
+    startY: 40,
+    head: [['Factor', 'Description', 'Status', 'Confirmed By / At']],
+    body: [
+      ['F1', 'Ground Staff Receive', conf?.factor1_confirmed_at ? '✓ Confirmed' : 'Pending', fmtFactor(conf?.factor1_confirmed_at, conf?.factor1_user_name)],
+      ['F2', 'Admin Approval', conf?.factor2_confirmed_at ? '✓ Confirmed' : 'Pending', fmtFactor(conf?.factor2_confirmed_at, conf?.factor2_user_name)],
+      ['F3', 'Client QR Scanned', conf?.factor3_confirmed_at ? '✓ Confirmed' : 'Pending', fmtFactor(conf?.factor3_confirmed_at, conf?.factor3_scanned_by_name)],
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8, textColor: [60, 60, 60] },
+    columnStyles: { 0: { cellWidth: 12 }, 2: { cellWidth: 28 } },
+    margin: { left: 10, right: 10 },
+  });
+
+  let y = doc.lastAutoTable.finalY + 12;
+
+  // Signature
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, y, W - 10, y);
+  y += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...PRIMARY);
+  doc.text('CUSTOMER / DRIVER SIGNATURE', 10, y);
+  y += 4;
+
+  if (signatureData) {
+    try { doc.addImage(signatureData, 'PNG', 10, y, 80, 28); } catch {}
+    y += 30;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(60, 60, 60);
+    if (signatureName) doc.text(`Name: ${signatureName}`, 10, y);
+    doc.text(`Date: ${today}`, 90, y);
+  } else {
+    doc.setDrawColor(180, 180, 180);
+    doc.rect(10, y, 80, 25);
+    y += 27;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(60, 60, 60);
+    doc.text('Name: ___________________________', 10, y);
+    doc.text(`Date: ${today}`, 100, y);
+  }
+
+  // Footer
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, pageH - 12, W - 10, pageH - 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(180, 180, 180);
+  doc.text(`${BRAND} · ${movNo} · Generated ${today}`, W / 2, pageH - 7, { align: 'center' });
+
+  doc.save(`InboundConfirmation-${movNo.replace('/', '-')}.pdf`);
+}

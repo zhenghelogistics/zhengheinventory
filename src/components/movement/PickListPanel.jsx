@@ -183,7 +183,10 @@ export default function PickListPanel({ movement, stockLines }) {
               {/* Photo review */}
               {pl.photo_url && pl.status === 'Admin Review' && (
                 <div className="space-y-2">
-                  <img src={pl.photo_url} alt="Pick proof" className="w-full max-h-48 object-cover rounded-lg border border-slate-200" />
+                  <a href={pl.photo_url} target="_blank" rel="noopener noreferrer" title="Click to view full resolution">
+                    <img src={pl.photo_url} alt="Pick proof" className="w-full rounded-lg border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity" style={{ maxHeight: '360px', objectFit: 'contain', background: '#f8fafc' }} />
+                  </a>
+                  <p className="text-[10px] text-slate-400 text-center">Click photo to open full resolution</p>
                   <button
                     onClick={() => approvePhoto(pl)}
                     disabled={approvingId === pl.id}

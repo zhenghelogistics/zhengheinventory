@@ -1,7 +1,71 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
+
+function SignaturePad({ onSave, onSkip }) {
+  const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
+  const drawing = useRef(false);
+  const dpr = useRef(1);
+  const [hasStrokes, setHasStrokes] = useState(false);
+  const [name, setName] = useState('');
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    const wrap = wrapRef.current;
+    if (!canvas || !wrap) return;
+    dpr.current = window.devicePixelRatio || 1;
+    const { width, height } = wrap.getBoundingClientRect();
+    canvas.width = Math.round(width * dpr.current);
+    canvas.height = Math.round(height * dpr.current);
+    canvas.getContext('2d').scale(dpr.current, dpr.current);
+  }, []);
+
+  function getPos(e) {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  }
+  function start(e) { e.preventDefault(); drawing.current = true; const p = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  function move(e) { e.preventDefault(); if (!drawing.current) return; const p = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1e3a8a'; ctx.lineTo(p.x, p.y); ctx.stroke(); setHasStrokes(true); }
+  function end(e) { e.preventDefault(); drawing.current = false; }
+  function clear() { canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasStrokes(false); }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <div>
+          <h3 className="font-bold text-slate-800 text-base">Driver / Client Signature</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Type name, then sign to confirm delivery</p>
+        </div>
+        <button onClick={onSkip} className="text-xs text-slate-400 font-semibold cursor-pointer px-2 py-1">Skip</button>
+      </div>
+      <div className="px-4 pt-4 pb-2 shrink-0">
+        <input
+          className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-800 font-semibold text-sm focus:outline-none focus:border-blue-400"
+          placeholder="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <div ref={wrapRef} className="flex-1 mx-4 mb-2 relative bg-slate-50 rounded-2xl border-2 border-slate-200 overflow-hidden" style={{ minHeight: 0 }}>
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} className="touch-none"
+          onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
+          onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
+        <div className="absolute left-8 right-8 pointer-events-none" style={{ bottom: '28%' }}>
+          <div className="border-b-2 border-dashed border-slate-300" />
+          <p className="text-[10px] text-slate-300 mt-1 text-center">Sign above this line</p>
+        </div>
+        {!hasStrokes && <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ paddingBottom: '10%' }}><span className="text-slate-300 text-base font-medium">Sign here</span></div>}
+      </div>
+      <div className="grid grid-cols-2 gap-3 px-4 pb-6 pt-2 shrink-0">
+        <button onClick={clear} className="h-13 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold cursor-pointer active:bg-slate-200">Clear</button>
+        <button onClick={() => onSave(canvasRef.current.toDataURL('image/png'), name)} disabled={!hasStrokes || !name.trim()} className="h-13 py-3.5 rounded-xl bg-blue-600 text-white font-bold cursor-pointer disabled:opacity-50 active:bg-blue-700">Confirm</button>
+      </div>
+    </div>
+  );
+}
 
 // Inject CSS to strip the library's default ugly UI
 const SCANNER_CSS = `
@@ -34,6 +98,7 @@ export default function ScanClientQR() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  const [showSignature, setShowSignature] = useState(false);
   const [done, setDone] = useState(false);
   const scannerRef = useRef(null);
 
@@ -136,6 +201,20 @@ export default function ScanClientQR() {
     });
 
     setConfirming(false);
+    setShowSignature(true); // Prompt for signature before done screen
+  }
+
+  async function saveSignature(dataUrl, name) {
+    await supabase
+      .from('delivery_confirmations')
+      .update({ inbound_signature_data: dataUrl, inbound_signature_name: name })
+      .eq('id', result.conf.id);
+    setShowSignature(false);
+    setDone(true);
+  }
+
+  function skipSignature() {
+    setShowSignature(false);
     setDone(true);
   }
 
@@ -144,6 +223,11 @@ export default function ScanClientQR() {
     setError(null);
     setDone(false);
     setTimeout(() => startScanner(), 100);
+  }
+
+  // ── Signature ─────────────────────────────────────────────────────────────
+  if (showSignature) {
+    return <SignaturePad onSave={saveSignature} onSkip={skipSignature} />;
   }
 
   // ── Done ──────────────────────────────────────────────────────────────────

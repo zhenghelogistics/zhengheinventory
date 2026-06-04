@@ -314,8 +314,8 @@ export default function MovementDetailPage() {
             />
           </Section>
 
-          {/* 3FA Confirmation */}
-          <Section title="3FA Confirmation" defaultOpen={false}>
+          {/* Inbound Confirmation */}
+          <Section title="Inbound Confirmation" defaultOpen={false}>
             <ConfirmationPanel movement={movement} />
           </Section>
 
