@@ -1,18 +1,47 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
 
 const STATUS_COLOR = {
   'Pending':            'bg-slate-100 text-slate-600',
   'Picking':            'bg-blue-100 text-blue-700',
-  'Checking':          'bg-violet-100 text-violet-700',
+  'Checking':           'bg-violet-100 text-violet-700',
   'Photo Pending':      'bg-amber-100 text-amber-700',
   'Admin Review':       'bg-orange-100 text-orange-700',
   'Awaiting Signature': 'bg-pink-100 text-pink-700',
   'Completed':          'bg-emerald-100 text-emerald-700',
 };
 
+// What each status means for the current user's role
+function isVisibleToUser(pl, userName) {
+  const { status, picker_name } = pl;
+  const iPicked = picker_name && picker_name === userName;
+  const unclaimed = !picker_name;
+
+  switch (status) {
+    case 'Pending':             return true;             // anyone can claim
+    case 'Picking':             return iPicked || unclaimed; // only the picker
+    case 'Checking':            return !iPicked;         // everyone except the picker
+    case 'Photo Pending':       return iPicked || unclaimed; // picker takes the photo
+    case 'Admin Review':        return true;             // everyone sees waiting state
+    case 'Awaiting Signature':  return iPicked || unclaimed; // picker closes it out
+    default:                    return true;
+  }
+}
+
+function roleLabel(pl, userName) {
+  const { status, picker_name } = pl;
+  if (status === 'Checking') return 'Counter-check needed';
+  if (status === 'Pending') return 'Tap to claim & pick';
+  if (status === 'Photo Pending' && picker_name === userName) return 'Your turn — take photo';
+  if (status === 'Awaiting Signature' && picker_name === userName) return 'Your turn — get signature';
+  if (status === 'Admin Review') return 'Waiting for admin';
+  return null;
+}
+
 export default function PickListsPage() {
+  const { user } = useWarehouseAuth();
   const [lists, setLists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,7 +62,6 @@ export default function PickListsPage() {
   useEffect(() => {
     fetchLists();
 
-    // Realtime: new pick list created or status updated
     const channel = supabase
       .channel('pick_lists_rt')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pick_lists' }, () => {
@@ -58,12 +86,15 @@ export default function PickListsPage() {
     </div>
   );
 
+  const userName = user?.name || '';
+  const visible = lists.filter((pl) => isVisibleToUser(pl, userName));
+
   return (
     <div className="px-4 py-5 max-w-lg mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-bold text-slate-800">Pick Lists</h2>
-          <p className="text-slate-500 text-xs mt-0.5">Tap a list to start picking</p>
+          <p className="text-slate-500 text-xs mt-0.5">Showing tasks for <span className="font-semibold">{userName}</span></p>
         </div>
         <button
           onClick={() => fetchLists(true)}
@@ -78,28 +109,51 @@ export default function PickListsPage() {
         </button>
       </div>
 
-      {lists.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="text-center py-16 text-slate-400 text-sm">
-          No active pick lists
+          Nothing for you right now
           <br />
-          <span className="text-xs text-slate-300">Admin creates pick lists from Hive</span>
+          <span className="text-xs text-slate-300">New tasks will appear here automatically</span>
         </div>
       ) : (
         <div className="space-y-3">
-          {lists.map((pl) => (
-            <button
-              key={pl.id}
-              onClick={() => navigate(`/warehouse/pick-lists/${pl.id}`)}
-              className="w-full bg-white rounded-2xl border-2 border-slate-200 p-4 shadow-sm active:bg-slate-50 active:border-blue-300 text-left cursor-pointer"
-            >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="font-mono font-bold text-slate-800">{pl.movements?.movement_no || '—'}</span>
-                <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${STATUS_COLOR[pl.status] || 'bg-slate-100 text-slate-600'}`}>{pl.status}</span>
-              </div>
-              <div className="text-slate-600 font-semibold text-sm mb-2">{pl.movements?.company_name || 'No company'}</div>
-              <div className="text-xs text-slate-400">{pl.pick_list_items?.length || 0} items to pick</div>
-            </button>
-          ))}
+          {visible.map((pl) => {
+            const role = roleLabel(pl, userName);
+            const isMyPick = pl.picker_name === userName;
+            const needsCheck = pl.status === 'Checking';
+            return (
+              <button
+                key={pl.id}
+                onClick={() => navigate(`/warehouse/pick-lists/${pl.id}`)}
+                className={`w-full rounded-2xl border-2 p-4 shadow-sm active:scale-[0.98] text-left cursor-pointer transition-all ${
+                  needsCheck
+                    ? 'bg-violet-50 border-violet-200 active:border-violet-400'
+                    : isMyPick
+                    ? 'bg-blue-50 border-blue-200 active:border-blue-400'
+                    : 'bg-white border-slate-200 active:border-blue-300'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="font-mono font-bold text-slate-800">{pl.movements?.movement_no || '—'}</span>
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${STATUS_COLOR[pl.status] || 'bg-slate-100 text-slate-600'}`}>{pl.status}</span>
+                </div>
+                <div className="text-slate-600 font-semibold text-sm mb-1">{pl.movements?.company_name || 'No company'}</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">{pl.pick_list_items?.length || 0} items</span>
+                  {role && (
+                    <span className={`text-[10px] font-bold ${needsCheck ? 'text-violet-600' : 'text-blue-600'}`}>
+                      {role}
+                    </span>
+                  )}
+                </div>
+                {pl.picker_name && (
+                  <div className="text-[10px] text-slate-400 mt-1">
+                    Picker: <span className="font-semibold">{pl.picker_name}</span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

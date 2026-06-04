@@ -183,10 +183,10 @@ export default function PickExecution() {
     setLoading(false);
   }
 
-  async function updateStatus(status) {
+  async function updateStatus(status, extra = {}) {
     setSaving(true);
-    await supabase.from('pick_lists').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-    setPl((p) => ({ ...p, status }));
+    await supabase.from('pick_lists').update({ status, updated_at: new Date().toISOString(), ...extra }).eq('id', id);
+    setPl((p) => ({ ...p, status, ...extra }));
     setSaving(false);
   }
 
@@ -302,6 +302,9 @@ export default function PickExecution() {
   );
 
   const { status, movements: mv } = pl;
+  const myName = user?.name || 'Staff';
+  const iPicked = pl.picker_name && pl.picker_name === myName;
+  const unclaimed = !pl.picker_name;
   const allPicked1 = items.every((i) => !!i.confirm1_at);
   const allPicked2 = items.every((i) => !!i.confirm2_at);
 
@@ -409,6 +412,21 @@ export default function PickExecution() {
     );
   }
 
+  // ── PHOTO PENDING — only picker ──
+  if (status === 'Photo Pending' && !iPicked && !unclaimed) {
+    return (
+      <div className="px-4 py-10 max-w-sm mx-auto text-center">
+        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <p className="font-bold text-slate-700 text-base mb-1">Waiting for {pl.picker_name}</p>
+        <p className="text-slate-400 text-sm">They own this list — they need to take the photo.</p>
+      </div>
+    );
+  }
+
   // ── PHOTO PENDING ──
   if (status === 'Photo Pending') {
     return (
@@ -446,6 +464,42 @@ export default function PickExecution() {
           </svg>
           {saving ? 'Uploading…' : 'Open Camera'}
         </button>
+      </div>
+    );
+  }
+
+  // ── CHECKING — picker sees handoff screen, others see checklist ──
+  if (status === 'Checking' && iPicked) {
+    return (
+      <div className="px-4 py-10 max-w-sm mx-auto text-center">
+        <div className="w-20 h-20 rounded-full bg-violet-100 flex items-center justify-center mx-auto mb-5">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+        <h2 className="text-lg font-black text-slate-800 mb-1">Handed off for counter-check</h2>
+        <p className="text-slate-500 text-sm mb-1">{mv?.movement_no} · {mv?.company_name}</p>
+        <p className="text-slate-400 text-xs">Another staff member is verifying your picks. Your app will update when it's your turn again.</p>
+        <div className="mt-4 flex items-center justify-center gap-1.5 text-violet-500 text-xs font-semibold">
+          <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+          Waiting for counter-check…
+        </div>
+      </div>
+    );
+  }
+
+  // ── AWAITING SIGNATURE — only picker ──
+  if (status === 'Awaiting Signature' && !iPicked && !unclaimed) {
+    return (
+      <div className="px-4 py-10 max-w-sm mx-auto text-center">
+        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <p className="font-bold text-slate-700 text-base mb-1">Waiting for {pl.picker_name}</p>
+        <p className="text-slate-400 text-sm">They own this list — they need to get the customer signature.</p>
       </div>
     );
   }
@@ -495,10 +549,10 @@ export default function PickExecution() {
 
         {!isPicking && (
           <button
-            onClick={() => updateStatus('Picking')}
+            onClick={() => updateStatus('Picking', { picker_name: myName })}
             className="w-full h-13 py-3 rounded-2xl bg-blue-600 text-white font-bold text-base cursor-pointer active:bg-blue-700"
           >
-            Start Picking
+            Start Picking — Claim this list
           </button>
         )}
 
@@ -508,7 +562,7 @@ export default function PickExecution() {
             disabled={saving}
             className="w-full h-13 py-3 rounded-2xl bg-violet-500 text-white font-bold text-base cursor-pointer active:bg-violet-600 disabled:opacity-60"
           >
-            All Picked — Hand to Staff 2
+            All Picked — Hand to Counter-Checker
           </button>
         )}
 
