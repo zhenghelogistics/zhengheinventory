@@ -65,6 +65,67 @@ html.dark { background-color: #0f172a; color-scheme: dark; }
 .dark .bg-slate-50.border-b { background-color: #1e293b !important; }
 .dark tbody tr:hover { background-color: #1e293b !important; }
 
+/* ── Coloured badges ─────────────────────────────────────────────────────── */
+.dark .bg-violet-100   { background-color: rgba(109,40,217,0.25) !important; }
+.dark .text-violet-700 { color: #c4b5fd !important; }
+.dark .border-violet-200 { border-color: rgba(109,40,217,0.35) !important; }
+
+.dark .bg-emerald-100   { background-color: rgba(5,150,105,0.2) !important; }
+.dark .text-emerald-700 { color: #6ee7b7 !important; }
+.dark .border-emerald-200 { border-color: rgba(5,150,105,0.35) !important; }
+
+.dark .bg-blue-100   { background-color: rgba(37,99,235,0.2) !important; }
+.dark .text-blue-700 { color: #93c5fd !important; }
+.dark .border-blue-200 { border-color: rgba(37,99,235,0.35) !important; }
+.dark .text-blue-600 { color: #60a5fa !important; }
+
+.dark .bg-amber-100   { background-color: rgba(180,83,9,0.2) !important; }
+.dark .text-amber-700 { color: #fcd34d !important; }
+.dark .border-amber-200 { border-color: rgba(180,83,9,0.35) !important; }
+
+.dark .bg-orange-100   { background-color: rgba(194,65,12,0.2) !important; }
+.dark .text-orange-700 { color: #fdba74 !important; }
+.dark .border-orange-200 { border-color: rgba(194,65,12,0.35) !important; }
+
+.dark .bg-pink-100   { background-color: rgba(190,24,93,0.2) !important; }
+.dark .text-pink-700 { color: #f9a8d4 !important; }
+.dark .border-pink-200 { border-color: rgba(190,24,93,0.35) !important; }
+
+.dark .bg-fuchsia-100   { background-color: rgba(162,28,175,0.2) !important; }
+.dark .text-fuchsia-700 { color: #e879f9 !important; }
+.dark .border-fuchsia-200 { border-color: rgba(162,28,175,0.35) !important; }
+
+.dark .bg-rose-100   { background-color: rgba(190,18,60,0.2) !important; }
+.dark .text-rose-700 { color: #fda4af !important; }
+.dark .text-rose-600 { color: #fb7185 !important; }
+.dark .border-rose-200 { border-color: rgba(190,18,60,0.35) !important; }
+
+.dark .bg-sky-100   { background-color: rgba(2,132,199,0.2) !important; }
+.dark .text-sky-700 { color: #7dd3fc !important; }
+.dark .border-sky-200 { border-color: rgba(2,132,199,0.35) !important; }
+
+.dark .bg-indigo-100   { background-color: rgba(67,56,202,0.2) !important; }
+.dark .text-indigo-700 { color: #a5b4fc !important; }
+.dark .border-indigo-200 { border-color: rgba(67,56,202,0.35) !important; }
+
+.dark .bg-red-100   { background-color: rgba(185,28,28,0.2) !important; }
+.dark .text-red-700 { color: #fca5a5 !important; }
+.dark .text-red-600 { color: #f87171 !important; }
+.dark .border-red-200 { border-color: rgba(185,28,28,0.35) !important; }
+
+/* Light-coloured section backgrounds (cards, panels) */
+.dark .bg-violet-50   { background-color: rgba(109,40,217,0.1) !important; }
+.dark .bg-emerald-50  { background-color: rgba(5,150,105,0.1) !important; }
+.dark .bg-blue-50     { background-color: rgba(37,99,235,0.1) !important; }
+.dark .bg-amber-50    { background-color: rgba(180,83,9,0.1) !important; }
+.dark .bg-orange-50   { background-color: rgba(194,65,12,0.1) !important; }
+.dark .bg-pink-50     { background-color: rgba(190,24,93,0.1) !important; }
+.dark .bg-fuchsia-50  { background-color: rgba(162,28,175,0.1) !important; }
+.dark .bg-rose-50     { background-color: rgba(190,18,60,0.1) !important; }
+.dark .bg-sky-50      { background-color: rgba(2,132,199,0.1) !important; }
+.dark .bg-indigo-50   { background-color: rgba(67,56,202,0.1) !important; }
+.dark .bg-red-50      { background-color: rgba(185,28,28,0.1) !important; }
+
 /* Shadows — soften in dark mode */
 .dark .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
 .dark .shadow-2xl { box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important; }
