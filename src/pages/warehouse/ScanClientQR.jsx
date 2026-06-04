@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
+import { exportInboundConfirmation } from '../../utils/pdfExports';
 
 function SignaturePad({ onSave, onSkip }) {
   const canvasRef = useRef(null);
@@ -99,6 +100,8 @@ export default function ScanClientQR() {
   const [error, setError] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [showSignature, setShowSignature] = useState(false);
+  const [stockLines, setStockLines] = useState([]);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [done, setDone] = useState(false);
   const scannerRef = useRef(null);
 
@@ -200,17 +203,32 @@ export default function ScanClientQR() {
       details: { movement_no: result.movement.movement_no, company: result.movement.company_name },
     });
 
+    // Fetch inbound stock lines for the PDF
+    const { data: lines } = await supabase
+      .from('stock_lines')
+      .select('*')
+      .eq('movement_id', movement.id)
+      .order('created_at');
+    setStockLines(lines || []);
+
     setConfirming(false);
-    setShowSignature(true); // Prompt for signature before done screen
+    setShowSignature(true);
   }
 
   async function saveSignature(dataUrl, name) {
-    await supabase
+    const { data: updatedConf } = await supabase
       .from('delivery_confirmations')
       .update({ inbound_signature_data: dataUrl, inbound_signature_name: name })
-      .eq('id', result.conf.id);
+      .eq('id', result.conf.id)
+      .select()
+      .single();
     setShowSignature(false);
     setDone(true);
+
+    // Auto-generate PDF immediately
+    try {
+      await exportInboundConfirmation(result.movement, updatedConf || result.conf, dataUrl, name, stockLines);
+    } catch {}
   }
 
   function skipSignature() {
@@ -242,7 +260,29 @@ export default function ScanClientQR() {
         <h2 className="text-xl font-black text-slate-800 mb-1">Factor 3 Confirmed</h2>
         <p className="text-slate-500 text-sm mb-2">{result.movement.company_name} · {result.movement.movement_no}</p>
         <p className="text-xs text-slate-400 mb-6">Client QR scanned by <strong>{user?.name}</strong></p>
-        <button onClick={reset} className="w-full h-12 rounded-2xl bg-blue-600 text-white font-bold cursor-pointer active:bg-blue-700">
+        <button
+          onClick={async () => {
+            setGeneratingPdf(true);
+            try {
+              await exportInboundConfirmation(
+                result.movement, result.conf,
+                result.conf?.inbound_signature_data, result.conf?.inbound_signature_name,
+                stockLines
+              );
+            } catch {}
+            setGeneratingPdf(false);
+          }}
+          disabled={generatingPdf}
+          className="w-full h-12 rounded-2xl bg-emerald-600 text-white font-bold cursor-pointer active:bg-emerald-700 disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          {generatingPdf ? 'Generating…' : 'Download Confirmation PDF'}
+        </button>
+        <button onClick={reset} className="w-full h-12 rounded-2xl bg-slate-100 text-slate-600 font-bold cursor-pointer active:bg-slate-200">
           Scan Another
         </button>
       </div>

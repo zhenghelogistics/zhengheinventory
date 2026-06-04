@@ -99,7 +99,19 @@ export default function ConfirmationPanel({ movement }) {
 
   async function downloadConfPdf() {
     setGeneratingConf(true);
-    try { await exportInboundConfirmation(movement, conf, conf?.inbound_signature_data || null, conf?.inbound_signature_name || null); } catch {}
+    try {
+      const { data: lines } = await supabase
+        .from('stock_lines')
+        .select('*')
+        .eq('movement_id', movement.id)
+        .order('created_at');
+      await exportInboundConfirmation(
+        movement, conf,
+        conf?.inbound_signature_data || null,
+        conf?.inbound_signature_name || null,
+        lines || []
+      );
+    } catch {}
     setGeneratingConf(false);
   }
 

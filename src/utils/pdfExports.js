@@ -606,7 +606,7 @@ export async function exportInboundQR(movement, qrDataUrl) {
 }
 
 // ── Inbound Confirmation Record PDF ──────────────────────────────────────────
-export async function exportInboundConfirmation(movement, conf, signatureData = null, signatureName = null) {
+export async function exportInboundConfirmation(movement, conf, signatureData = null, signatureName = null, stockLines = []) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210;
   const pageH = 297;
@@ -656,7 +656,35 @@ export async function exportInboundConfirmation(movement, conf, signatureData = 
     margin: { left: 10, right: 10 },
   });
 
-  let y = doc.lastAutoTable.finalY + 12;
+  let y = doc.lastAutoTable.finalY + 8;
+
+  // ── Inbound stock lines ────────────────────────────────────────────────────
+  const inboundLines = stockLines.filter((l) => l.line_type !== 'Outbound');
+  if (inboundLines.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...PRIMARY);
+    doc.text('INBOUND STOCK LIST', 10, y);
+    y += 3;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['SKU', 'Description', 'Qty', 'Unit']],
+      body: inboundLines.map((l) => [
+        l.sku || '—',
+        l.description || '—',
+        l.qty_actual ?? '—',
+        l.unit || 'pcs',
+      ]),
+      theme: 'grid',
+      headStyles: { fillColor: PRIMARY, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+      bodyStyles: { fontSize: 8, textColor: [60, 60, 60] },
+      columnStyles: { 0: { cellWidth: 30 }, 2: { cellWidth: 16, halign: 'center' }, 3: { cellWidth: 16, halign: 'center' } },
+      margin: { left: 10, right: 10 },
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+  }
 
   // Signature
   doc.setDrawColor(200, 200, 200);
