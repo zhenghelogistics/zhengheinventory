@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseLog } from '../../hooks/useWarehouseLog';
+import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
+import { extractPackingList, matchItemsToLines } from '../../services/extractionService';
 
 function StepCard({ number, title, state, by, at, children }) {
   const colors = {
@@ -57,6 +59,7 @@ function FactorPip({ n, done, label }) {
 
 export default function ReceiveDelivery() {
   const { log } = useWarehouseLog();
+  const { user } = useWarehouseAuth();
   const navigate = useNavigate();
 
   const [movements, setMovements] = useState([]);
@@ -72,6 +75,12 @@ export default function ReceiveDelivery() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [received, setReceived] = useState(false);  // step 1 done flag (local)
+
+  // AI extraction
+  const [extracting, setExtracting] = useState(false);
+  const [extractStage, setExtractStage] = useState('');
+  const [extractResult, setExtractResult] = useState(null); // { matched, total }
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     load();
@@ -140,9 +149,46 @@ export default function ReceiveDelivery() {
       });
     }
     await supabase.from('movements').update({ status: 'In Progress' }).eq('id', selected.id);
+
+    // Stamp Factor 1 — upsert so it works whether or not admin has initialised the record yet
+    const now = new Date().toISOString();
+    const { data: updatedConf } = await supabase
+      .from('delivery_confirmations')
+      .upsert(
+        {
+          movement_id: selected.id,
+          factor1_confirmed_at: now,
+          factor1_user_name: user?.name || 'Ground Staff',
+        },
+        { onConflict: 'movement_id', ignoreDuplicates: false }
+      )
+      .select()
+      .single();
+    if (updatedConf) setConf(updatedConf);
+
     setSelected((p) => ({ ...p, status: 'In Progress' }));
     setReceived(true);
     setSaving(false);
+  }
+
+  async function handleFileExtract(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setExtracting(true);
+    setExtractResult(null);
+    try {
+      const data = await extractPackingList(file, setExtractStage);
+      const updates = matchItemsToLines(data.items, lines);
+      const matchedCount = Object.keys(updates).length;
+      setDrafts((prev) => ({ ...prev, ...updates }));
+      setExtractResult({ matched: matchedCount, total: (data.items || []).length });
+    } catch (err) {
+      setExtractResult({ error: err.message });
+    } finally {
+      setExtracting(false);
+      setExtractStage('');
+    }
   }
 
   // ── Detail view ──────────────────────────────────────────────────────────────
@@ -195,6 +241,53 @@ export default function ReceiveDelivery() {
             >
               {!received ? (
                 <>
+                  {/* AI pre-fill banner */}
+                  {lines.length > 0 && (
+                    <div className="mb-3">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/pdf,image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handleFileExtract}
+                      />
+                      {extracting ? (
+                        <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-violet-50 border border-violet-200 text-violet-700 text-xs font-semibold">
+                          <div className="w-4 h-4 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin shrink-0" />
+                          {extractStage || 'Scanning…'}
+                        </div>
+                      ) : extractResult ? (
+                        extractResult.error ? (
+                          <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-red-50 border border-red-200">
+                            <span className="text-red-600 text-xs font-semibold">{extractResult.error}</span>
+                            <button onClick={() => setExtractResult(null)} className="text-red-400 text-xs underline cursor-pointer">Dismiss</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                            <span className="text-emerald-700 text-xs font-semibold">
+                              {extractResult.matched > 0
+                                ? `${extractResult.matched} of ${extractResult.total} items pre-filled`
+                                : `${extractResult.total} item(s) extracted — no lines matched`}
+                            </span>
+                            <button onClick={() => setExtractResult(null)} className="text-emerald-500 text-xs underline cursor-pointer">Dismiss</button>
+                          </div>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 text-xs font-semibold hover:border-violet-300 hover:text-violet-600 active:bg-violet-50 cursor-pointer transition-colors"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                          </svg>
+                          Scan Packing List — AI Pre-fill Quantities
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {lines.length === 0 ? (
                     <p className="text-center text-slate-400 text-sm py-4">No inbound stock lines on this movement.</p>
                   ) : (

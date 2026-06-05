@@ -220,10 +220,10 @@ export default function ConfirmationPanel({ movement }) {
         </div>
       </div>
 
-      {/* Confirmation PDF + signature — shown when all confirmed */}
-      {allConfirmed && (
+      {/* Confirmation PDF — available once admin has approved (F2) */}
+      {conf?.factor2_confirmed_at && (
         <div className="border-t border-slate-100 pt-4 space-y-3">
-          {conf.inbound_signature_data && (
+          {allConfirmed && conf.inbound_signature_data && (
             <div className="space-y-1">
               <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Driver / Client Signature</div>
               <img src={conf.inbound_signature_data} alt="Signature" className="h-16 border border-slate-200 rounded-lg bg-white" />
@@ -242,6 +242,9 @@ export default function ConfirmationPanel({ movement }) {
             </svg>
             {generatingConf ? 'Generating…' : 'Download Confirmation PDF'}
           </button>
+          {!allConfirmed && (
+            <p className="text-[10px] text-slate-400">PDF will show confirmed factors so far. Signature section appears after client QR scan.</p>
+          )}
         </div>
       )}
     </div>

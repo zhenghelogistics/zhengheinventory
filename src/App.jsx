@@ -1,6 +1,10 @@
-import { Routes, Route, NavLink } from 'react-router-dom';
-import { Navigate } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from './hooks/useTheme';
+import PortalSelectPage from './pages/PortalSelectPage';
+import PSSLayout from './pages/pss/PSSLayout';
+import PSSHome from './pages/pss/PSSHome';
+import NewShipment from './pages/pss/NewShipment';
+import PortalSwitcher from './components/PortalSwitcher';
 import MovementListPage from './pages/MovementListPage';
 import MovementDetailPage from './pages/MovementDetailPage';
 import WarehouseLayout from './pages/warehouse/WarehouseLayout';
@@ -49,10 +53,12 @@ const NAV = [
 
 function MainApp() {
   const { dark, toggle } = useTheme();
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'Fira Sans', system-ui, sans-serif" }}>
       <header className="bg-[#0f1f5c] px-5 py-0 flex items-center h-12 shrink-0 z-30 border-b border-white/10">
-        <div className="flex items-center mr-8">
+        <div className="flex items-center gap-2 mr-8">
+          <PortalSwitcher current="hive" />
           <img src="/hive-logo.svg" alt="Hive" className="h-9 w-auto" />
         </div>
         <nav className="flex items-center gap-1 h-full flex-1">
@@ -95,7 +101,6 @@ function MainApp() {
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <Routes>
-          <Route path="/" element={<Navigate to="/movements" replace />} />
           <Route path="/movements" element={<MovementListPage />} />
           <Route path="/movements/:id" element={<MovementDetailPage />} />
           <Route path="/activity" element={<ActivityLogPage />} />
@@ -109,6 +114,11 @@ export default function App() {
   return (
     <WarehouseAuthProvider>
       <Routes>
+        <Route path="/" element={<PortalSelectPage />} />
+        <Route path="/pss" element={<PSSLayout />}>
+          <Route index element={<PSSHome />} />
+          <Route path="new" element={<NewShipment />} />
+        </Route>
         <Route path="/warehouse" element={<WarehouseLayout />}>
           <Route index element={<WarehouseHome />} />
           <Route path="pick-list" element={<PickList />} />
