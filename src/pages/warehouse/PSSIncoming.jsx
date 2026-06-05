@@ -1,7 +1,142 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
 import { useWarehouseLog } from '../../hooks/useWarehouseLog';
+import { exportPSSProofOfDelivery } from '../../utils/pdfExports';
+
+// ── Signature pad ─────────────────────────────────────────────────────────────
+function SignaturePad({ onSave, onBack }) {
+  const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
+  const drawing = useRef(false);
+  const dpr = useRef(1);
+  const [hasStrokes, setHasStrokes] = useState(false);
+  const [name, setName] = useState('');
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    const wrap = wrapRef.current;
+    if (!canvas || !wrap) return;
+    dpr.current = window.devicePixelRatio || 1;
+    const { width, height } = wrap.getBoundingClientRect();
+    canvas.width = Math.round(width * dpr.current);
+    canvas.height = Math.round(height * dpr.current);
+    canvas.getContext('2d').scale(dpr.current, dpr.current);
+  }, []);
+
+  function getPos(e) {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  }
+  function start(e) { e.preventDefault(); drawing.current = true; const p = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  function move(e) { e.preventDefault(); if (!drawing.current) return; const p = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0f172a'; ctx.lineTo(p.x, p.y); ctx.stroke(); setHasStrokes(true); }
+  function end(e) { e.preventDefault(); drawing.current = false; }
+  function clear() { canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasStrokes(false); }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <div>
+          <h3 className="font-bold text-slate-800 text-base">Driver Signature</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Enter driver's name and sign to confirm delivery</p>
+        </div>
+        <button onClick={onBack} className="text-xs text-slate-400 font-semibold cursor-pointer px-2 py-1">Back</button>
+      </div>
+      <div className="px-4 pt-4 pb-2 shrink-0">
+        <input
+          className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-800 font-semibold text-sm focus:outline-none focus:border-teal-400"
+          placeholder="Driver's full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+      </div>
+      <div ref={wrapRef} className="flex-1 mx-4 mb-2 relative bg-slate-50 rounded-2xl border-2 border-slate-200 overflow-hidden" style={{ minHeight: 0 }}>
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} className="touch-none"
+          onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
+          onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
+        <div className="absolute left-8 right-8 pointer-events-none" style={{ bottom: '28%' }}>
+          <div className="border-b-2 border-dashed border-slate-300" />
+          <p className="text-[10px] text-slate-300 mt-1 text-center">Sign above this line</p>
+        </div>
+        {!hasStrokes && <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ paddingBottom: '10%' }}><span className="text-slate-300 text-base font-medium">Sign here</span></div>}
+      </div>
+      <div className="grid grid-cols-2 gap-3 px-4 pb-6 pt-2 shrink-0">
+        <button onClick={clear} className="py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold cursor-pointer active:bg-slate-200">Clear</button>
+        <button onClick={() => onSave(canvasRef.current.toDataURL('image/png'), name)} disabled={!hasStrokes || !name.trim()} className="py-3.5 rounded-xl bg-teal-600 text-white font-bold cursor-pointer disabled:opacity-50 active:bg-teal-700">Confirm</button>
+      </div>
+    </div>
+  );
+}
+
+// ── QR Scanner ────────────────────────────────────────────────────────────────
+const SCANNER_CSS = `
+  #pss-qr-reader { border: none !important; background: transparent !important; }
+  #pss-qr-reader__header_message { display: none !important; }
+  #pss-qr-reader__status_span { display: none !important; }
+  #pss-qr-reader__dashboard_section_csr button {
+    background: #0d9488 !important; color: white !important; border: none !important;
+    border-radius: 12px !important; padding: 12px 24px !important;
+    font-weight: 700 !important; font-size: 14px !important;
+    cursor: pointer !important; width: 100% !important; margin-top: 8px !important;
+  }
+  #pss-qr-reader__dashboard_section_swaplink { display: none !important; }
+  #pss-qr-reader__filescan_input { display: none !important; }
+  #pss-qr-reader__dashboard_section_filesel { display: none !important; }
+  #pss-qr-reader video { border-radius: 16px !important; width: 100% !important; }
+  #pss-qr-reader__scan_region { border-radius: 16px !important; overflow: hidden !important; }
+  #pss-qr-reader__scan_region img { display: none !important; }
+  #pss-qr-reader__dashboard { padding: 8px 0 0 0 !important; }
+`;
+
+function QRScanner({ onScanned, onSkip }) {
+  const scannerRef = useRef(null);
+
+  useEffect(() => {
+    if (!document.getElementById('pss-qr-style')) {
+      const s = document.createElement('style');
+      s.id = 'pss-qr-style';
+      s.textContent = SCANNER_CSS;
+      document.head.appendChild(s);
+    }
+    const scanner = new Html5QrcodeScanner('pss-qr-reader', {
+      fps: 10, qrbox: { width: 240, height: 240 },
+      supportedScanTypes: [0], rememberLastUsedCamera: true,
+      showTorchButtonIfSupported: true,
+      videoConstraints: { facingMode: 'environment' },
+    }, false);
+    scanner.render((text) => {
+      scanner.clear().catch(() => {});
+      scannerRef.current = null;
+      onScanned(text);
+    }, () => {});
+    scannerRef.current = scanner;
+    return () => { scanner.clear().catch(() => {}); };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col">
+      <div className="px-5 py-4 flex items-center justify-between shrink-0">
+        <div>
+          <h3 className="font-bold text-white text-base">Scan Delivery QR</h3>
+          <p className="text-slate-400 text-xs mt-0.5">Point at the QR code on the driver's delivery document</p>
+        </div>
+      </div>
+      <div className="flex-1 px-4 overflow-hidden">
+        <div className="rounded-2xl overflow-hidden bg-black h-full max-h-[480px]">
+          <div id="pss-qr-reader" className="w-full" />
+        </div>
+      </div>
+      <div className="px-4 py-6 shrink-0">
+        <button onClick={onSkip} className="w-full py-3.5 rounded-xl border border-slate-600 text-slate-300 font-semibold text-sm cursor-pointer active:bg-slate-800">
+          No QR code — go straight to signature
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function StepCard({ number, title, state, children }) {
   const colors = {
@@ -85,6 +220,10 @@ export default function PSSIncoming() {
   const [saving, setSaving] = useState(false);
   const [confirmingF1, setConfirmingF1] = useState(false);
   const [received, setReceived] = useState(false);
+
+  // POD flow: null | 'scanning' | 'signing' | 'done'
+  const [podFlow, setPodFlow] = useState(null);
+  const [podGenerating, setPodGenerating] = useState(false);
 
   useEffect(() => {
     load();
@@ -187,6 +326,39 @@ export default function PSSIncoming() {
     setConfirmingF1(false);
   }
 
+  async function savePOD(signatureDataUrl, driverName) {
+    const now = new Date().toISOString();
+    const { data: updatedConf } = await supabase
+      .from('delivery_confirmations')
+      .upsert({
+        movement_id: selected.id,
+        factor3_confirmed_at: now,
+        factor3_scanned_by_name: user?.name || 'Warehouse',
+        factor3_scanned_by_id: user?.id || null,
+        inbound_signature_data: signatureDataUrl,
+        inbound_signature_name: driverName,
+      }, { onConflict: 'movement_id', ignoreDuplicates: false })
+      .select()
+      .single();
+
+    if (updatedConf) setConf(updatedConf);
+    setPodFlow('done');
+
+    // Generate PDF immediately
+    setPodGenerating(true);
+    try {
+      await exportPSSProofOfDelivery({
+        movement: selected,
+        pssShipment: meta,
+        lines,
+        conf: updatedConf || conf,
+        signatureDataUrl,
+        driverName,
+      });
+    } catch (e) { console.error('PDF error', e); }
+    setPodGenerating(false);
+  }
+
   // ── Detail view ────────────────────────────────────────────────────────────
   if (selected) {
     const f1Done = !!conf?.factor1_confirmed_at;
@@ -194,6 +366,51 @@ export default function PSSIncoming() {
     const f3Done = !!conf?.factor3_confirmed_at;
     const allConfirmed = f1Done && f2Done && f3Done;
     const step2State = allConfirmed ? 'done' : received ? 'active' : 'locked';
+
+    // POD overlays
+    if (podFlow === 'scanning') {
+      return <QRScanner onScanned={() => setPodFlow('signing')} onSkip={() => setPodFlow('signing')} />;
+    }
+    if (podFlow === 'signing') {
+      return <SignaturePad onSave={savePOD} onBack={() => setPodFlow('scanning')} />;
+    }
+    if (podFlow === 'done') {
+      return (
+        <div className="px-4 py-10 max-w-sm mx-auto text-center">
+          <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center mx-auto mb-5">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <h2 className="text-xl font-black text-slate-800 mb-1">Delivery Confirmed</h2>
+          <p className="text-slate-500 text-sm mb-1">{selected.movement_no}</p>
+          <p className="text-slate-400 text-xs mb-6">Signed by <strong>{conf?.inbound_signature_name}</strong> · All 3 factors complete</p>
+          <button
+            onClick={async () => {
+              setPodGenerating(true);
+              try {
+                await exportPSSProofOfDelivery({
+                  movement: selected, pssShipment: meta, lines, conf,
+                  signatureDataUrl: conf?.inbound_signature_data,
+                  driverName: conf?.inbound_signature_name,
+                });
+              } catch {}
+              setPodGenerating(false);
+            }}
+            disabled={podGenerating}
+            className="w-full h-12 rounded-2xl bg-teal-600 text-white font-bold cursor-pointer active:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            {podGenerating ? 'Generating PDF…' : 'Download Proof of Delivery'}
+          </button>
+          <button onClick={() => { setPodFlow(null); setSelected(null); setLines([]); setConf(null); }} className="w-full h-12 rounded-2xl bg-slate-100 text-slate-600 font-bold cursor-pointer active:bg-slate-200">
+            Done
+          </button>
+        </div>
+      );
+    }
 
     return (
       <div className="px-4 py-5 max-w-lg mx-auto space-y-3 pb-10">
@@ -330,10 +547,17 @@ export default function PSSIncoming() {
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     Admin approved · F2 by {conf.factor2_user_name}
                   </div>
-                  <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-indigo-50 border border-indigo-200">
-                    <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse shrink-0" />
-                    <div className="text-indigo-700 text-xs font-bold">Awaiting client QR scan (F3)</div>
-                  </div>
+                  <button
+                    onClick={() => setPodFlow('scanning')}
+                    className="w-full h-12 rounded-xl bg-indigo-600 text-white font-bold text-sm cursor-pointer active:bg-indigo-700 flex items-center justify-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                      <line x1="14" y1="14" x2="17" y2="14"/><line x1="20" y1="14" x2="20" y2="14"/>
+                      <line x1="17" y1="17" x2="20" y2="17"/><line x1="20" y1="20" x2="20" y2="20"/>
+                    </svg>
+                    Scan Delivery QR &amp; Get Signature
+                  </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 text-emerald-600 text-xs font-semibold">

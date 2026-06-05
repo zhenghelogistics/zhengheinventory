@@ -725,3 +725,157 @@ export async function exportInboundConfirmation(movement, conf, signatureData = 
 
   doc.save(`InboundConfirmation-${movNo.replace('/', '-')}.pdf`);
 }
+
+// ── PSS Proof of Delivery ─────────────────────────────────────────────────────
+export async function exportPSSProofOfDelivery({ movement, pssShipment, lines, conf, signatureDataUrl, driverName }) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const today = new Date().toLocaleDateString('en-SG');
+  const now = new Date().toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const poNo = pssShipment?.po_number || movement?.movement_no || '—';
+
+  // ── Header band ─────────────────────────────────────────────────────────────
+  doc.setFillColor(6, 78, 59); // teal-900 — PSS colour
+  doc.rect(0, 0, W, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+
+  const logo = await loadLogoBase64('/zhl-logo-white.png');
+  if (logo) doc.addImage(logo, 'PNG', 8, 3, 44, 15);
+  else { doc.setFontSize(11); doc.text(BRAND, 10, 14); }
+
+  doc.setFontSize(10);
+  doc.text('PROOF OF DELIVERY', W - 10, 14, { align: 'right' });
+
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  let y = 30;
+
+  // ── Shipment details block ───────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(6, 78, 59);
+  doc.text('SHIPMENT DETAILS', 10, y);
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  y += 5;
+
+  const details = [
+    ['PO / Reference', poNo],
+    ['Client / Exporter', pssShipment?.client_name || movement?.company_name || '—'],
+    ['Consignee', pssShipment?.consignee_name || '—'],
+    ['Vessel / Voyage', [pssShipment?.vessel, pssShipment?.voyage].filter(Boolean).join(' / ') || '—'],
+    ['Port of Loading', pssShipment?.pol || '—'],
+    ['Port of Discharge', pssShipment?.pod || '—'],
+    ['ETD', pssShipment?.etd || movement?.date_in || '—'],
+    ['Container', [pssShipment?.container_type, pssShipment?.container_no].filter(Boolean).join(' · ') || '—'],
+    ['BL Number', pssShipment?.bl_number || '—'],
+  ];
+
+  details.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${label}:`, 10, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(value), 65, y);
+    y += 5;
+  });
+
+  y += 3;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, y, W - 10, y);
+  y += 6;
+
+  // ── Items table ──────────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(6, 78, 59);
+  doc.text('ITEMS RECEIVED', 10, y);
+  y += 3;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Description', 'HS Code', 'Qty', 'Unit']],
+    body: (lines || []).map((l, i) => [
+      i + 1,
+      l.description || '—',
+      l.sku || l.hs_code || '—',
+      l.qty_ordered ?? l.qty_actual ?? '—',
+      l.unit || 'PCS',
+    ]),
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [6, 78, 59], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+    columnStyles: { 0: { cellWidth: 10 }, 2: { cellWidth: 28, font: 'courier' }, 3: { cellWidth: 18, halign: 'right' }, 4: { cellWidth: 18 } },
+    margin: { left: 10, right: 10 },
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ── Confirmation record ──────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(6, 78, 59);
+  doc.text('CONFIRMATION RECORD', 10, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+
+  const fmtTs = (ts) => ts ? new Date(ts).toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  const factors = [
+    ['F1 — Ground Staff', conf?.factor1_user_name, fmtTs(conf?.factor1_confirmed_at)],
+    ['F2 — Admin Approval', conf?.factor2_user_name, fmtTs(conf?.factor2_confirmed_at)],
+    ['F3 — Delivery Sign-off', driverName || conf?.factor3_scanned_by_name, fmtTs(conf?.factor3_confirmed_at)],
+  ];
+  factors.forEach(([label, name, time]) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(label + ':', 10, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${name || '—'}   ${time}`, 65, y);
+    y += 5;
+  });
+
+  y += 4;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, y, W - 10, y);
+  y += 6;
+
+  // ── Signature block ──────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(6, 78, 59);
+  doc.text('DELIVERY DRIVER SIGNATURE', 10, y);
+  y += 4;
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Driver Name: ${driverName || '—'}`, 10, y);
+  y += 3;
+  doc.text(`Signed at: ${now}`, 10, y);
+  y += 4;
+
+  if (signatureDataUrl) {
+    const sigH = 30;
+    const sigW = 80;
+    doc.setDrawColor(200, 200, 200);
+    doc.rect(10, y, sigW, sigH);
+    try { doc.addImage(signatureDataUrl, 'PNG', 10, y, sigW, sigH); } catch {}
+    y += sigH + 3;
+  } else {
+    doc.setDrawColor(180, 180, 180);
+    doc.line(10, y + 20, 90, y + 20);
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Signature', 10, y + 25);
+    y += 30;
+  }
+
+  // ── Footer ───────────────────────────────────────────────────────────────────
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, pageH - 12, W - 10, pageH - 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(180, 180, 180);
+  doc.text(`${BRAND} · ${poNo} · Generated ${today}`, W / 2, pageH - 7, { align: 'center' });
+
+  doc.save(`POD-${poNo.replace(/[/\\]/g, '-')}.pdf`);
+}
