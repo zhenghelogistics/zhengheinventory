@@ -104,7 +104,12 @@ export default function PSSShipmentDetail() {
     }
 
     // Link movement back to this PSS shipment
-    await supabase.from('pss_shipments').update({ movement_id: mov.id }).eq('id', id);
+    const { error: linkErr } = await supabase.from('pss_shipments').update({ movement_id: mov.id }).eq('id', id);
+    if (linkErr) {
+      setMovementError(`Movement created but link failed: ${linkErr.message}`);
+      setCreatingMovement(false);
+      return;
+    }
     setShipment((p) => ({ ...p, movement_id: mov.id }));
     setCreatingMovement(false);
   }
@@ -288,23 +293,22 @@ export default function PSSShipmentDetail() {
         </Section>
       )}
 
-      {/* Brood link */}
-      <Section title="Warehouse Receiving Job">
+      {/* Warehouse processing status — no internal tool names exposed */}
+      <Section title="Processing Status">
         {shipment.movement_id ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-emerald-600 text-sm font-bold">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Receiving job created in Brood
+          <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div>
+              <div className="text-emerald-700 text-sm font-bold">Handover confirmed</div>
+              <div className="text-emerald-600 text-xs mt-0.5">Shipment has been passed to operations. You will be notified once it is received and cleared.</div>
             </div>
-            <p className="text-slate-500 text-xs leading-relaxed">
-              Ground staff can see this shipment under <strong>Brood → PSS Incoming</strong>. They will count the items and sign off when goods arrive.
-            </p>
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-slate-500 text-xs leading-relaxed">
-              No receiving job in Brood yet. Create one so ground staff can see the expected shipment and count items when goods arrive.
-            </p>
+            <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200">
+              <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+              <div className="text-slate-500 text-xs">Pending handover to operations. Confirm once permit is ready.</div>
+            </div>
             {movementError && (
               <div className="text-red-500 text-xs font-semibold">{movementError}</div>
             )}
@@ -314,15 +318,13 @@ export default function PSSShipmentDetail() {
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-bold cursor-pointer hover:bg-teal-700 disabled:opacity-60"
             >
               {creatingMovement ? (
-                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Creating…</>
+                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Processing…</>
               ) : (
                 <>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="17 8 12 3 7 8"/>
-                    <line x1="12" y1="3" x2="12" y2="15"/>
+                    <polyline points="20 6 9 17 4 12"/>
                   </svg>
-                  Send to Brood — Create Receiving Job
+                  Confirm Handover to Operations
                 </>
               )}
             </button>
