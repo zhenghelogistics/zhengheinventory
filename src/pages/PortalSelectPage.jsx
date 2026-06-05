@@ -71,11 +71,11 @@ export default function PortalSelectPage() {
     >
       {/* Header */}
       <div className="text-center mb-12">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <img src="/hive-logo.svg" alt="Zhenghe Logistics" className="h-10 w-auto" onError={(e) => { e.target.style.display = 'none'; }} />
+        <div className="flex items-center justify-center mb-5">
+          <img src="/hive-logo.svg" alt="Zhenghe Logistics" className="h-24 w-auto drop-shadow-[0_0_32px_rgba(99,179,237,0.25)]" onError={(e) => { e.target.style.display = 'none'; }} />
         </div>
-        <h1 className="text-2xl font-black text-white tracking-tight">Zhenghe Logistics</h1>
-        <p className="text-slate-400 text-sm mt-1">Select your portal to continue</p>
+        <h1 className="text-3xl font-black text-white tracking-tight">Zhenghe Logistics</h1>
+        <p className="text-slate-400 text-sm mt-2">Select your portal to continue</p>
       </div>
 
       {/* Portal tiles */}
