@@ -4,29 +4,24 @@ import { supabase } from '../../lib/supabase';
 import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
 import { exportPickList } from '../../utils/pdfExports';
 
-// ── Signature canvas ──────────────────────────────────────────────────────────
+// ── Signature pad (full-screen overlay) ──────────────────────────────────────
 function SignaturePad({ onSave, onCancel }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const drawing = useRef(false);
-  const lastPos = useRef(null);
   const dpr = useRef(1);
   const [hasStrokes, setHasStrokes] = useState(false);
   const [name, setName] = useState('');
 
-  // Set canvas pixel dimensions to exactly match rendered size × devicePixelRatio
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
     if (!canvas || !wrap) return;
-
     dpr.current = window.devicePixelRatio || 1;
     const { width, height } = wrap.getBoundingClientRect();
     canvas.width = Math.round(width * dpr.current);
     canvas.height = Math.round(height * dpr.current);
-
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr.current, dpr.current);
+    canvas.getContext('2d').scale(dpr.current, dpr.current);
   }, []);
 
   function getPos(e) {
@@ -34,55 +29,17 @@ function SignaturePad({ onSave, onCancel }) {
     const src = e.touches ? e.touches[0] : e;
     return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   }
-
-  function start(e) {
-    e.preventDefault();
-    drawing.current = true;
-    const pos = getPos(e);
-    lastPos.current = pos;
-    const ctx = canvasRef.current.getContext('2d');
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
-  }
-
-  function move(e) {
-    e.preventDefault();
-    if (!drawing.current) return;
-    const pos = getPos(e);
-    const ctx = canvasRef.current.getContext('2d');
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#1e3a8a';
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    lastPos.current = pos;
-    setHasStrokes(true);
-  }
-
-  function end(e) {
-    e.preventDefault();
-    drawing.current = false;
-    lastPos.current = null;
-  }
-
-  function clear() {
-    const canvas = canvasRef.current;
-    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-    setHasStrokes(false);
-  }
-
-  function save() {
-    onSave(canvasRef.current.toDataURL('image/png'), name);
-  }
+  function start(e) { e.preventDefault(); drawing.current = true; const p = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  function move(e) { e.preventDefault(); if (!drawing.current) return; const p = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1e3a8a'; ctx.lineTo(p.x, p.y); ctx.stroke(); setHasStrokes(true); }
+  function end(e) { e.preventDefault(); drawing.current = false; }
+  function clear() { canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasStrokes(false); }
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
-      {/* Header */}
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
         <div>
           <h3 className="font-bold text-slate-800 text-base">Customer Signature</h3>
-          <p className="text-xs text-slate-400 mt-0.5">Type name, then sign in the box</p>
+          <p className="text-xs text-slate-400 mt-0.5">Type name, then sign to confirm</p>
         </div>
         <button onClick={onCancel} className="p-2 rounded-xl bg-slate-100 text-slate-500 cursor-pointer active:bg-slate-200">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -90,55 +47,68 @@ function SignaturePad({ onSave, onCancel }) {
           </svg>
         </button>
       </div>
-
-      {/* Name input */}
       <div className="px-4 pt-4 pb-2 shrink-0">
-        <input
-          className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-800 font-semibold text-sm focus:outline-none focus:border-blue-400"
-          placeholder="Customer full name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <input className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-800 font-semibold text-sm focus:outline-none focus:border-blue-400" placeholder="Customer full name" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
-
-      {/* Canvas — takes all remaining space */}
-      <div
-        ref={wrapRef}
-        className="flex-1 mx-4 mb-2 relative bg-slate-50 rounded-2xl border-2 border-slate-200 overflow-hidden"
-        style={{ minHeight: 0 }}
-      >
-        <canvas
-          ref={canvasRef}
-          style={{ width: '100%', height: '100%', display: 'block' }}
-          className="touch-none"
+      <div ref={wrapRef} className="flex-1 mx-4 mb-2 relative bg-slate-50 rounded-2xl border-2 border-slate-200 overflow-hidden" style={{ minHeight: 0 }}>
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} className="touch-none"
           onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
-          onTouchStart={start} onTouchMove={move} onTouchEnd={end}
-        />
-        {/* Signature baseline */}
+          onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
         <div className="absolute left-8 right-8 pointer-events-none" style={{ bottom: '28%' }}>
           <div className="border-b-2 border-dashed border-slate-300" />
           <p className="text-[10px] text-slate-300 mt-1 text-center">Sign above this line</p>
         </div>
-        {!hasStrokes && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ paddingBottom: '10%' }}>
-            <span className="text-slate-300 text-base font-medium">Sign here</span>
-          </div>
-        )}
+        {!hasStrokes && <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ paddingBottom: '10%' }}><span className="text-slate-300 text-base font-medium">Sign here</span></div>}
       </div>
-
-      {/* Buttons */}
       <div className="grid grid-cols-2 gap-3 px-4 pb-6 pt-2 shrink-0">
-        <button onClick={clear} className="h-13 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold cursor-pointer active:bg-slate-200">
-          Clear
-        </button>
-        <button
-          onClick={save}
-          disabled={!hasStrokes || !name.trim()}
-          className="h-13 py-3.5 rounded-xl bg-blue-600 text-white font-bold cursor-pointer disabled:opacity-50 active:bg-blue-700"
-        >
-          Confirm Signature
-        </button>
+        <button onClick={clear} className="h-13 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold cursor-pointer active:bg-slate-200">Clear</button>
+        <button onClick={() => onSave(canvasRef.current.toDataURL('image/png'), name)} disabled={!hasStrokes || !name.trim()} className="h-13 py-3.5 rounded-xl bg-blue-600 text-white font-bold cursor-pointer disabled:opacity-50 active:bg-blue-700">Confirm Signature</button>
       </div>
+    </div>
+  );
+}
+
+// ── Step card shell ───────────────────────────────────────────────────────────
+function StepCard({ number, title, state, by, at, children }) {
+  // state: 'done' | 'active' | 'waiting' | 'locked'
+  const colors = {
+    done:    'border-emerald-200 bg-emerald-50',
+    active:  'border-blue-300 bg-blue-50/40',
+    waiting: 'border-slate-200 bg-white',
+    locked:  'border-slate-200 bg-slate-50/60',
+  };
+  const numColors = {
+    done:    'bg-emerald-500 text-white',
+    active:  'bg-blue-600 text-white',
+    waiting: 'bg-slate-200 text-slate-400',
+    locked:  'bg-slate-200 text-slate-400',
+  };
+
+  return (
+    <div className={`rounded-2xl border-2 overflow-hidden transition-all ${colors[state]}`}>
+      {/* Step header */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-black ${numColors[state]}`}>
+          {state === 'done'
+            ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            : number}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={`font-bold text-sm ${state === 'locked' || state === 'waiting' ? 'text-slate-400' : 'text-slate-800'}`}>{title}</div>
+          {state === 'done' && by && (
+            <div className="text-[10px] text-emerald-600 mt-0.5 font-semibold">
+              {by}{at && <span className="font-normal text-emerald-500"> · {new Date(at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
+            </div>
+          )}
+          {state === 'waiting' && <div className="text-[10px] text-slate-400 mt-0.5">Waiting for previous step</div>}
+          {state === 'locked' && <div className="text-[10px] text-slate-400 mt-0.5">Not assigned to you</div>}
+        </div>
+        {state === 'active' && <span className="shrink-0 w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
+      </div>
+      {/* Step body — only shown when active or done */}
+      {(state === 'active' || state === 'done') && children && (
+        <div className="px-4 pb-4">{children}</div>
+      )}
     </div>
   );
 }
@@ -158,18 +128,12 @@ export default function PickExecution() {
 
   useEffect(() => {
     fetchData();
-
-    // Realtime: auto-advance when admin changes status (e.g. approves photo)
     const channel = supabase
       .channel(`pick_list_exec_${id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'pick_lists',
-        filter: `id=eq.${id}`,
-      }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pick_lists', filter: `id=eq.${id}` }, (payload) => {
         setPl((prev) => prev ? { ...prev, ...payload.new } : payload.new);
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
@@ -204,31 +168,13 @@ export default function PickExecution() {
     if (!file) return;
     setSaving(true);
     setPhotoError(null);
-
     const ext = file.name.split('.').pop() || 'jpg';
     const path = `${id}/${Date.now()}.${ext}`;
-    const { data: uploaded, error: uploadErr } = await supabase.storage
-      .from('pick-photos')
-      .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: true });
-
-    if (uploadErr) {
-      setPhotoError(`Upload failed: ${uploadErr.message}`);
-      setSaving(false);
-      return;
-    }
-
+    const { data: uploaded, error: uploadErr } = await supabase.storage.from('pick-photos').upload(path, file, { contentType: file.type || 'image/jpeg', upsert: true });
+    if (uploadErr) { setPhotoError(`Upload failed: ${uploadErr.message}`); setSaving(false); return; }
     const { data: { publicUrl } } = supabase.storage.from('pick-photos').getPublicUrl(uploaded.path);
-    const { error: updateErr } = await supabase
-      .from('pick_lists')
-      .update({ photo_url: publicUrl, status: 'Admin Review', updated_at: new Date().toISOString() })
-      .eq('id', id);
-
-    if (updateErr) {
-      setPhotoError(`Status update failed: ${updateErr.message}`);
-      setSaving(false);
-      return;
-    }
-
+    const { error: updateErr } = await supabase.from('pick_lists').update({ photo_url: publicUrl, status: 'Admin Review', updated_at: new Date().toISOString() }).eq('id', id);
+    if (updateErr) { setPhotoError(`Update failed: ${updateErr.message}`); setSaving(false); return; }
     setPl((p) => ({ ...p, photo_url: publicUrl, status: 'Admin Review' }));
     setSaving(false);
   }
@@ -237,61 +183,21 @@ export default function PickExecution() {
     setSaving(true);
     setShowSignature(false);
     const now = new Date().toISOString();
-    await supabase.from('pick_lists').update({
-      signature_data: dataUrl,
-      signature_name: name,
-      signed_at: now,
-      status: 'Completed',
-      completed_at: now,
-      updated_at: now,
-    }).eq('id', id);
+    await supabase.from('pick_lists').update({ signature_data: dataUrl, signature_name: name, signed_at: now, status: 'Completed', completed_at: now, updated_at: now }).eq('id', id);
 
-    // Auto-deduct stock: create Outbound records for each item
     for (const item of items) {
       if (item.stock_line_id && item.qty_to_pick > 0) {
-        // Fetch the original stock line to get movement_id
         const { data: sl } = await supabase.from('stock_lines').select('movement_id, unit, nexus_job_no').eq('id', item.stock_line_id).single();
         if (sl) {
-          await supabase.from('stock_lines').insert({
-            movement_id: sl.movement_id,
-            line_type: 'Outbound',
-            sku: item.sku,
-            description: item.description,
-            unit: item.unit || sl.unit,
-            nexus_job_no: sl.nexus_job_no || null,
-            qty_out: item.qty_to_pick,
-            qty_actual: 0,
-            date_out: now.slice(0, 10),
-            remarks: `FIGARO pick list — ${name}`,
-          });
+          await supabase.from('stock_lines').insert({ movement_id: sl.movement_id, line_type: 'Outbound', sku: item.sku, description: item.description, unit: item.unit || sl.unit, nexus_job_no: sl.nexus_job_no || null, qty_out: item.qty_to_pick, qty_actual: 0, date_out: now.slice(0, 10), remarks: `FIGARO pick list — ${name}` });
         }
       }
     }
 
-    await supabase.from('warehouse_activity_log').insert({
-      user_id: user?.id || null,
-      user_name: user?.name || 'Warehouse',
-      action_type: 'figaro_complete',
-      record_id: id,
-      record_ref: pl?.movements?.movement_no,
-      details: { items: items.length, signed_by: name },
-    });
-
+    await supabase.from('warehouse_activity_log').insert({ user_id: user?.id || null, user_name: user?.name || 'Warehouse', action_type: 'figaro_complete', record_id: id, record_ref: pl?.movements?.movement_no, details: { items: items.length, signed_by: name } });
     await fetchData();
     setSaving(false);
-
-    // Generate final signed PDF
-    try {
-      await exportPickList(pl?.movements, items, dataUrl, name);
-    } catch {}
-  }
-
-  async function previewPdf() {
-    setGeneratingPdf(true);
-    try {
-      await exportPickList(pl?.movements, items, null, null);
-    } catch {}
-    setGeneratingPdf(false);
+    try { await exportPickList(pl?.movements, items, dataUrl, name); } catch {}
   }
 
   if (loading || !pl) return (
@@ -303,336 +209,239 @@ export default function PickExecution() {
 
   const { status, movements: mv } = pl;
   const myName = user?.name || 'Staff';
-  const iPicked = pl.picker_name && pl.picker_name === myName;
-  const unclaimed = !pl.picker_name;
+  const isPicker = !pl.picker_name || pl.picker_name === myName;
   const allPicked1 = items.every((i) => !!i.confirm1_at);
   const allPicked2 = items.every((i) => !!i.confirm2_at);
 
-  // ── COMPLETED ──
-  if (status === 'Completed') {
-    return (
-      <div className="px-4 py-10 max-w-sm mx-auto text-center">
-        <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center mx-auto mb-5">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </div>
-        <h2 className="text-xl font-black text-slate-800 mb-1">Pick List Complete</h2>
-        <p className="text-slate-500 text-sm mb-1">{mv?.company_name} · {mv?.movement_no}</p>
-        <p className="text-xs text-slate-400 mb-6">Stock deducted automatically (FIGARO)</p>
-        <button
-          onClick={async () => {
-            setGeneratingPdf(true);
-            try { await exportPickList(mv, items, pl.signature_data, pl.signature_name); } catch {}
-            setGeneratingPdf(false);
-          }}
-          disabled={generatingPdf}
-          className="w-full h-12 rounded-2xl bg-white border-2 border-emerald-200 text-emerald-700 font-bold text-sm cursor-pointer active:bg-emerald-50 disabled:opacity-60 flex items-center justify-center gap-2"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-          </svg>
-          {generatingPdf ? 'Generating…' : 'Download Signed PDF'}
-        </button>
-      </div>
-    );
-  }
+  // Step states
+  const s1Done = allPicked1 && !['Pending', 'Picking'].includes(status);
+  const s2Done = allPicked2 && !['Pending', 'Picking', 'Checking'].includes(status);
+  const s3Done = !!pl.photo_url && status !== 'Photo Pending';
+  const s4Done = !!pl.photo_approved_at;
+  const s5Done = !!pl.signed_at;
 
-  // ── AWAITING SIGNATURE ──
-  if (status === 'Awaiting Signature') {
-    return (
-      <div className="px-4 py-5 max-w-sm mx-auto">
-        {showSignature && <SignaturePad onSave={submitSignature} onCancel={() => setShowSignature(false)} />}
-        <div className="mb-5">
-          <div className="font-mono font-bold text-slate-800 text-lg">{mv?.movement_no}</div>
-          <div className="text-slate-500 text-sm">{mv?.company_name}</div>
-        </div>
-        <div className="bg-pink-50 border-2 border-pink-200 rounded-2xl p-5 text-center mb-4">
-          <div className="w-12 h-12 rounded-full bg-pink-500 flex items-center justify-center mx-auto mb-3">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-            </svg>
-          </div>
-          <h3 className="font-bold text-pink-800 text-base mb-1">Customer Signature Required</h3>
-          <p className="text-pink-600 text-xs">Hand the tablet to the customer to sign</p>
-        </div>
-        <button
-          onClick={previewPdf}
-          disabled={generatingPdf}
-          className="w-full h-12 rounded-2xl bg-white border-2 border-slate-200 text-slate-700 font-bold text-sm cursor-pointer active:bg-slate-50 disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-          </svg>
-          {generatingPdf ? 'Generating…' : 'View Pick List PDF'}
-        </button>
-        <button
-          onClick={() => setShowSignature(true)}
-          disabled={saving}
-          className="w-full h-14 rounded-2xl bg-pink-500 text-white font-bold text-lg cursor-pointer active:bg-pink-600 disabled:opacity-60"
-        >
-          Open Signature Pad
-        </button>
-      </div>
-    );
-  }
+  const stepState = (doneFlag, activeCondition, lockedCondition) => {
+    if (doneFlag) return 'done';
+    if (lockedCondition) return 'locked';
+    if (activeCondition) return 'active';
+    return 'waiting';
+  };
 
-  // ── ADMIN REVIEW (waiting for photo approval) ──
-  if (status === 'Admin Review') {
-    return (
-      <div className="px-4 py-5 max-w-sm mx-auto text-center">
-        <div className="mb-5">
-          <div className="font-mono font-bold text-slate-800 text-lg">{mv?.movement_no}</div>
-          <div className="text-slate-500 text-sm">{mv?.company_name}</div>
-        </div>
-        <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-6 mb-4">
-          <div className="w-12 h-12 rounded-full bg-orange-400 flex items-center justify-center mx-auto mb-3">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          </div>
-          <h3 className="font-bold text-orange-800 text-base mb-1">Waiting for Admin</h3>
-          <p className="text-orange-600 text-xs mb-3">Photo submitted. Admin must approve before customer can sign.</p>
-          <div className="flex items-center justify-center gap-1.5 text-orange-500 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-            Listening for approval…
-          </div>
-        </div>
-        {pl.photo_url && (
-          <img src={pl.photo_url} alt="Submitted photo" className="w-full rounded-2xl border border-slate-200 mb-4" />
-        )}
-        <button onClick={fetchData} className="w-full py-2 text-xs font-semibold text-slate-400 cursor-pointer">
-          Tap to refresh manually
-        </button>
-      </div>
-    );
-  }
+  return (
+    <div className="px-4 py-5 max-w-lg mx-auto space-y-3 pb-10">
+      {showSignature && <SignaturePad onSave={submitSignature} onCancel={() => setShowSignature(false)} />}
+      <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
 
-  // ── PHOTO PENDING — only picker ──
-  if (status === 'Photo Pending' && !iPicked && !unclaimed) {
-    return (
-      <div className="px-4 py-10 max-w-sm mx-auto text-center">
-        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-        <p className="font-bold text-slate-700 text-base mb-1">Waiting for {pl.picker_name}</p>
-        <p className="text-slate-400 text-sm">They own this list — they need to take the photo.</p>
-      </div>
-    );
-  }
-
-  // ── PHOTO PENDING ──
-  if (status === 'Photo Pending') {
-    return (
-      <div className="px-4 py-5 max-w-sm mx-auto">
-        <div className="mb-5">
-          <div className="font-mono font-bold text-slate-800 text-lg">{mv?.movement_no}</div>
-          <div className="text-slate-500 text-sm">{mv?.company_name}</div>
-        </div>
-        <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 text-center mb-4">
-          <div className="w-12 h-12 rounded-full bg-amber-400 flex items-center justify-center mx-auto mb-3">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 0 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-          </div>
-          <h3 className="font-bold text-amber-800 text-base mb-1">Take Photo Proof</h3>
-          <p className="text-amber-600 text-xs">Photograph the picked items clearly</p>
-        </div>
-
-        {photoError && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-xs font-semibold mb-2">
-            {photoError}
+      {/* Header */}
+      <div className="mb-1">
+        <div className="font-mono font-bold text-slate-800 text-lg">{mv?.movement_no}</div>
+        <div className="text-slate-500 text-sm">{mv?.company_name}</div>
+        {pl.picker_name && (
+          <div className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            {pl.picker_name}
           </div>
         )}
-
-        <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
-        <button
-          onClick={() => { setPhotoError(null); photoInputRef.current.click(); }}
-          disabled={saving}
-          className="w-full h-14 rounded-2xl bg-amber-400 text-white font-bold text-lg cursor-pointer active:bg-amber-500 disabled:opacity-60 flex items-center justify-center gap-2"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 0 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-          {saving ? 'Uploading…' : 'Open Camera'}
-        </button>
       </div>
-    );
-  }
 
-  // ── CHECKING — picker sees handoff screen, others see checklist ──
-  if (status === 'Checking' && iPicked) {
-    return (
-      <div className="px-4 py-10 max-w-sm mx-auto text-center">
-        <div className="w-20 h-20 rounded-full bg-violet-100 flex items-center justify-center mx-auto mb-5">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-        </div>
-        <h2 className="text-lg font-black text-slate-800 mb-1">Handed off for counter-check</h2>
-        <p className="text-slate-500 text-sm mb-1">{mv?.movement_no} · {mv?.company_name}</p>
-        <p className="text-slate-400 text-xs">Another staff member is verifying your picks. Your app will update when it's your turn again.</p>
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-violet-500 text-xs font-semibold">
-          <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-          Waiting for counter-check…
-        </div>
-      </div>
-    );
-  }
-
-  // ── AWAITING SIGNATURE — only picker ──
-  if (status === 'Awaiting Signature' && !iPicked && !unclaimed) {
-    return (
-      <div className="px-4 py-10 max-w-sm mx-auto text-center">
-        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-        <p className="font-bold text-slate-700 text-base mb-1">Waiting for {pl.picker_name}</p>
-        <p className="text-slate-400 text-sm">They own this list — they need to get the customer signature.</p>
-      </div>
-    );
-  }
-
-  // ── PICKING (Staff 1) ──
-  if (status === 'Pending' || status === 'Picking') {
-    const isPicking = status === 'Picking';
-
-    return (
-      <div className="px-4 py-5 max-w-lg mx-auto">
-        <div className="mb-4">
-          <div className="font-mono font-bold text-slate-800 text-lg">{mv?.movement_no}</div>
-          <div className="text-slate-500 text-sm mb-1">{mv?.company_name}</div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-[11px] font-bold">
-            <span className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[9px] font-black">1</span>
-            Staff 1 — Picking
-          </div>
-        </div>
-
-        <div className="space-y-2 mb-4">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${item.confirm1_at ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}
-            >
-              <button
-                onClick={() => !item.confirm1_at && confirmItem(item.id, 1)}
-                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0 cursor-pointer transition-all ${item.confirm1_at ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 bg-white active:border-emerald-400'}`}
-              >
-                {item.confirm1_at && (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                )}
-              </button>
-              <div className="flex-1 min-w-0">
-                <div className={`font-bold text-sm ${item.confirm1_at ? 'text-emerald-800 line-through opacity-60' : 'text-slate-800'}`}>{item.description}</div>
-                {item.sku && <div className="text-[10px] font-mono text-slate-400">{item.sku}</div>}
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-xl font-black text-slate-700 tabular-nums">{item.qty_to_pick}</div>
-                <div className="text-[10px] text-slate-400">{item.unit || 'pcs'}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {!isPicking && (
+      {/* ── Step 1: Pick ── */}
+      <StepCard
+        number={1}
+        title="Staff 1 — Pick"
+        state={stepState(s1Done, ['Pending','Picking'].includes(status), false)}
+        by={s1Done ? items[0]?.confirm1_by : null}
+        at={s1Done ? items[0]?.confirm1_at : null}
+      >
+        {status === 'Pending' && (isPicker) && (
           <button
             onClick={() => updateStatus('Picking', { picker_name: myName })}
-            className="w-full h-13 py-3 rounded-2xl bg-blue-600 text-white font-bold text-base cursor-pointer active:bg-blue-700"
-          >
-            Start Picking — Claim this list
-          </button>
-        )}
-
-        {isPicking && allPicked1 && (
-          <button
-            onClick={() => updateStatus('Checking')}
             disabled={saving}
-            className="w-full h-13 py-3 rounded-2xl bg-violet-500 text-white font-bold text-base cursor-pointer active:bg-violet-600 disabled:opacity-60"
+            className="w-full h-11 rounded-xl bg-blue-600 text-white font-bold text-sm cursor-pointer active:bg-blue-700 disabled:opacity-60 mb-3"
           >
-            All Picked — Hand to Counter-Checker
+            Claim & Start Picking
           </button>
         )}
 
-        {isPicking && !allPicked1 && (
-          <div className="text-center text-xs text-slate-400 py-2">
-            {items.filter((i) => i.confirm1_at).length} / {items.length} items ticked
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── CHECKING (Staff 2) ──
-  if (status === 'Checking') {
-    return (
-      <div className="px-4 py-5 max-w-lg mx-auto">
-        <div className="mb-4">
-          <div className="font-mono font-bold text-slate-800 text-lg">{mv?.movement_no}</div>
-          <div className="text-slate-500 text-sm mb-1">{mv?.company_name}</div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-violet-100 text-violet-700 rounded-full text-[11px] font-bold">
-            <span className="w-4 h-4 rounded-full bg-violet-500 text-white flex items-center justify-center text-[9px] font-black">2</span>
-            Staff 2 — Counter-check
-          </div>
-        </div>
-
-        <div className="space-y-2 mb-4">
+        <div className="space-y-2">
           {items.map((item) => (
-            <div
-              key={item.id}
-              className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${item.confirm2_at ? 'border-violet-200 bg-violet-50' : 'border-slate-200 bg-white'}`}
-            >
+            <div key={item.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${item.confirm1_at ? 'border-emerald-200 bg-emerald-50/60' : 'border-slate-200 bg-white'}`}>
               <button
-                onClick={() => !item.confirm2_at && confirmItem(item.id, 2)}
-                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0 cursor-pointer transition-all ${item.confirm2_at ? 'border-violet-500 bg-violet-500' : 'border-slate-300 bg-white active:border-violet-400'}`}
+                onClick={() => !item.confirm1_at && isPicker && status === 'Picking' && confirmItem(item.id, 1)}
+                disabled={!!item.confirm1_at || !isPicker || status !== 'Picking'}
+                className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${item.confirm1_at ? 'border-emerald-500 bg-emerald-500 cursor-default' : isPicker && status === 'Picking' ? 'border-slate-300 bg-white cursor-pointer active:border-emerald-400' : 'border-slate-200 bg-slate-50 cursor-default'}`}
               >
-                {item.confirm2_at && (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                )}
+                {item.confirm1_at && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
               </button>
               <div className="flex-1 min-w-0">
-                <div className={`font-bold text-sm ${item.confirm2_at ? 'text-violet-800 line-through opacity-60' : 'text-slate-800'}`}>{item.description}</div>
+                <div className={`font-semibold text-sm ${item.confirm1_at ? 'line-through text-slate-400' : 'text-slate-800'}`}>{item.description}</div>
                 {item.sku && <div className="text-[10px] font-mono text-slate-400">{item.sku}</div>}
-                {item.confirm1_by && <div className="text-[10px] text-slate-400">Picked by {item.confirm1_by}</div>}
+                {item.confirm1_at && item.confirm1_by && <div className="text-[10px] text-emerald-600 font-semibold">{item.confirm1_by}</div>}
               </div>
               <div className="text-right shrink-0">
-                <div className="text-xl font-black text-slate-700 tabular-nums">{item.qty_to_pick}</div>
+                <div className="text-lg font-black text-slate-700 tabular-nums">{item.qty_to_pick}</div>
                 <div className="text-[10px] text-slate-400">{item.unit || 'pcs'}</div>
               </div>
             </div>
           ))}
         </div>
 
-        {allPicked2 ? (
-          <button
-            onClick={() => updateStatus('Photo Pending')}
-            disabled={saving}
-            className="w-full h-13 py-3 rounded-2xl bg-amber-400 text-white font-bold text-base cursor-pointer active:bg-amber-500 disabled:opacity-60"
-          >
-            All Verified — Take Photo
-          </button>
-        ) : (
-          <div className="text-center text-xs text-slate-400 py-2">
-            {items.filter((i) => i.confirm2_at).length} / {items.length} items verified
+        {status === 'Picking' && isPicker && (
+          <div className="mt-3">
+            {allPicked1 ? (
+              <button onClick={() => updateStatus('Checking')} disabled={saving} className="w-full h-11 rounded-xl bg-violet-500 text-white font-bold text-sm cursor-pointer active:bg-violet-600 disabled:opacity-60">
+                All Picked — Hand to Counter-Checker
+              </button>
+            ) : (
+              <div className="text-center text-xs text-slate-400 py-1">{items.filter((i) => i.confirm1_at).length} / {items.length} ticked</div>
+            )}
           </div>
         )}
-      </div>
-    );
-  }
 
-  return null;
+        {status === 'Checking' && isPicker && (
+          <div className="mt-2 text-center text-xs text-violet-600 font-semibold py-1 flex items-center justify-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+            Handed off — waiting for counter-check
+          </div>
+        )}
+      </StepCard>
+
+      {/* ── Step 2: Counter-check ── */}
+      <StepCard
+        number={2}
+        title="Staff 2 — Counter-check"
+        state={stepState(s2Done, status === 'Checking' && !isPicker, status === 'Checking' && isPicker)}
+        by={s2Done ? items[0]?.confirm2_by : null}
+        at={s2Done ? items[0]?.confirm2_at : null}
+      >
+        <div className="space-y-2">
+          {items.map((item) => (
+            <div key={item.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${item.confirm2_at ? 'border-violet-200 bg-violet-50/60' : 'border-slate-200 bg-white'}`}>
+              <button
+                onClick={() => !item.confirm2_at && !isPicker && status === 'Checking' && confirmItem(item.id, 2)}
+                disabled={!!item.confirm2_at || isPicker || status !== 'Checking'}
+                className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${item.confirm2_at ? 'border-violet-500 bg-violet-500 cursor-default' : !isPicker && status === 'Checking' ? 'border-slate-300 bg-white cursor-pointer active:border-violet-400' : 'border-slate-200 bg-slate-50 cursor-default'}`}
+              >
+                {item.confirm2_at && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className={`font-semibold text-sm ${item.confirm2_at ? 'line-through text-slate-400' : 'text-slate-800'}`}>{item.description}</div>
+                {item.sku && <div className="text-[10px] font-mono text-slate-400">{item.sku}</div>}
+                {item.confirm1_by && <div className="text-[10px] text-slate-400">Picked by {item.confirm1_by}</div>}
+                {item.confirm2_at && item.confirm2_by && <div className="text-[10px] text-violet-600 font-semibold">{item.confirm2_by}</div>}
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-lg font-black text-slate-700 tabular-nums">{item.qty_to_pick}</div>
+                <div className="text-[10px] text-slate-400">{item.unit || 'pcs'}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {status === 'Checking' && !isPicker && (
+          <div className="mt-3">
+            {allPicked2 ? (
+              <button onClick={() => updateStatus('Photo Pending')} disabled={saving} className="w-full h-11 rounded-xl bg-amber-400 text-white font-bold text-sm cursor-pointer active:bg-amber-500 disabled:opacity-60">
+                All Verified — Back to Picker for Photo
+              </button>
+            ) : (
+              <div className="text-center text-xs text-slate-400 py-1">{items.filter((i) => i.confirm2_at).length} / {items.length} verified</div>
+            )}
+          </div>
+        )}
+      </StepCard>
+
+      {/* ── Step 3: Photo proof ── */}
+      <StepCard
+        number={3}
+        title="Photo proof"
+        state={stepState(s3Done, status === 'Photo Pending' && isPicker, status === 'Photo Pending' && !isPicker)}
+        by={s3Done ? pl.picker_name : null}
+        at={null}
+      >
+        {pl.photo_url && (
+          <a href={pl.photo_url} target="_blank" rel="noopener noreferrer">
+            <img src={pl.photo_url} alt="Photo proof" className="w-full rounded-xl border border-slate-200 mb-3 cursor-zoom-in" />
+          </a>
+        )}
+        {status === 'Photo Pending' && isPicker && (
+          <>
+            {photoError && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-red-600 text-xs font-semibold mb-2">{photoError}</div>}
+            <button
+              onClick={() => { setPhotoError(null); photoInputRef.current.click(); }}
+              disabled={saving}
+              className="w-full h-11 rounded-xl bg-amber-400 text-white font-bold text-sm cursor-pointer active:bg-amber-500 disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 0 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+              </svg>
+              {saving ? 'Uploading…' : 'Open Camera'}
+            </button>
+          </>
+        )}
+        {status === 'Photo Pending' && !isPicker && (
+          <div className="text-xs text-slate-400 py-1 text-center">Waiting for {pl.picker_name} to take photo</div>
+        )}
+      </StepCard>
+
+      {/* ── Step 4: Admin approval ── */}
+      <StepCard
+        number={4}
+        title="Admin approval"
+        state={stepState(s4Done, status === 'Admin Review', !pl.photo_url)}
+        by={s4Done ? pl.photo_approved_by : null}
+        at={pl.photo_approved_at}
+      >
+        <div className="flex items-center gap-2 text-orange-600 text-xs font-semibold py-1">
+          <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+          Photo submitted — waiting for admin review in Hive
+        </div>
+      </StepCard>
+
+      {/* ── Step 5: Customer signature ── */}
+      <StepCard
+        number={5}
+        title="Customer signature"
+        state={stepState(s5Done, status === 'Awaiting Signature' && isPicker, status === 'Awaiting Signature' && !isPicker)}
+        by={pl.signature_name}
+        at={pl.signed_at}
+      >
+        {pl.signature_data && (
+          <img src={pl.signature_data} alt="Signature" className="h-16 border border-slate-200 rounded-xl bg-white mb-3" />
+        )}
+        {status === 'Awaiting Signature' && isPicker && (
+          <button onClick={() => setShowSignature(true)} disabled={saving} className="w-full h-11 rounded-xl bg-pink-500 text-white font-bold text-sm cursor-pointer active:bg-pink-600 disabled:opacity-60">
+            Get Customer Signature
+          </button>
+        )}
+        {status === 'Awaiting Signature' && !isPicker && (
+          <div className="text-xs text-slate-400 py-1 text-center">Waiting for {pl.picker_name} to collect signature</div>
+        )}
+      </StepCard>
+
+      {/* ── Completed ── */}
+      {status === 'Completed' && (
+        <div className="rounded-2xl bg-emerald-500 p-5 text-center text-white">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <div className="font-black text-base mb-0.5">Pick List Complete</div>
+          <div className="text-emerald-100 text-xs mb-4">Stock deducted automatically</div>
+          <button
+            onClick={async () => {
+              setGeneratingPdf(true);
+              try { await exportPickList(mv, items, pl.signature_data, pl.signature_name); } catch {}
+              setGeneratingPdf(false);
+            }}
+            disabled={generatingPdf}
+            className="w-full h-10 rounded-xl bg-white/20 text-white font-bold text-sm cursor-pointer active:bg-white/30 disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            {generatingPdf ? 'Generating…' : 'Download Signed PDF'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
