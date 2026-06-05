@@ -97,6 +97,7 @@ const SCANNER_CSS = `
 export default function ScanClientQR() {
   const { user } = useWarehouseAuth();
   const [result, setResult] = useState(null);
+  const [savedConf, setSavedConf] = useState(null); // conf with signature after save
   const [error, setError] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [showSignature, setShowSignature] = useState(false);
@@ -207,7 +208,7 @@ export default function ScanClientQR() {
     const { data: lines } = await supabase
       .from('stock_lines')
       .select('*')
-      .eq('movement_id', movement.id)
+      .eq('movement_id', result.movement.id)
       .order('created_at');
     setStockLines(lines || []);
 
@@ -222,13 +223,15 @@ export default function ScanClientQR() {
       .eq('id', result.conf.id)
       .select()
       .single();
+    const finalConf = updatedConf || { ...result.conf, inbound_signature_data: dataUrl, inbound_signature_name: name };
+    setSavedConf(finalConf);
     setShowSignature(false);
     setDone(true);
 
     // Auto-generate PDF immediately
     try {
-      await exportInboundConfirmation(result.movement, updatedConf || result.conf, dataUrl, name, stockLines);
-    } catch {}
+      await exportInboundConfirmation(result.movement, finalConf, dataUrl, name, stockLines);
+    } catch (e) { console.error('PDF generation error:', e); }
   }
 
   function skipSignature() {
@@ -238,6 +241,8 @@ export default function ScanClientQR() {
 
   function reset() {
     setResult(null);
+    setSavedConf(null);
+    setStockLines([]);
     setError(null);
     setDone(false);
     setTimeout(() => startScanner(), 100);
@@ -264,9 +269,10 @@ export default function ScanClientQR() {
           onClick={async () => {
             setGeneratingPdf(true);
             try {
+              const confToUse = savedConf || result.conf;
               await exportInboundConfirmation(
-                result.movement, result.conf,
-                result.conf?.inbound_signature_data, result.conf?.inbound_signature_name,
+                result.movement, confToUse,
+                confToUse?.inbound_signature_data, confToUse?.inbound_signature_name,
                 stockLines
               );
             } catch {}
