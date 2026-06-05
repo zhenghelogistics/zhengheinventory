@@ -234,7 +234,6 @@ export default function NewShipment() {
           status:           'New',
           source:           'PSS',
           company_name:     shipment.client_name,
-          reference_number: shipment.po_number,
           date_in:          shipment.etd,
         })
         .select()

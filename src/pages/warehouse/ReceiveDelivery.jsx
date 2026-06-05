@@ -102,7 +102,7 @@ export default function ReceiveDelivery() {
     if (quiet) setRefreshing(true); else setLoading(true);
     const [mvRes, confRes] = await Promise.all([
       supabase.from('movements')
-        .select('id, movement_no, company_name, status, type, reference_number, notes, date_in, created_at')
+        .select('id, movement_no, company_name, status, type, notes, date_in, created_at')
         .eq('type', 'Inbound')
         .in('status', ['New', 'In Progress'])
         .order('created_at', { ascending: false }),
@@ -222,9 +222,7 @@ export default function ReceiveDelivery() {
             <div>
               <h2 className="text-lg font-bold text-slate-800">{selected.movement_no}</h2>
               {selected.company_name && <p className="text-slate-500 text-sm">{selected.company_name}</p>}
-              {selected.reference_number && (
-                <p className="text-[11px] text-slate-400 font-mono mt-0.5">Ref: {selected.reference_number}</p>
-              )}
+
               {selected.date_in && (
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   Expected: {new Date(selected.date_in).toLocaleDateString('en-GB')}
@@ -489,7 +487,7 @@ export default function ReceiveDelivery() {
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-800">{mv.movement_no}</div>
                   {mv.company_name && <div className="text-slate-500 text-sm">{mv.company_name}</div>}
-                  {mv.reference_number && <div className="text-[10px] font-mono text-slate-400 mt-0.5">{mv.reference_number}</div>}
+
                   {c && (
                     <div className="flex items-center gap-1.5 mt-2">
                       {[{ n: 1, done: f1 }, { n: 2, done: f2 }, { n: 3, done: f3 }].map(({ n, done }) => (

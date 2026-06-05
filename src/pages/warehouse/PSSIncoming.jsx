@@ -120,7 +120,7 @@ export default function PSSIncoming() {
     const [mvRes, confRes] = await Promise.all([
       supabase
         .from('movements')
-        .select('id, movement_no, company_name, status, type, reference_number, date_in, created_at')
+        .select('id, movement_no, company_name, status, type, date_in, created_at')
         .in('id', movIds)
         .in('status', ['New', 'In Progress'])
         .order('created_at', { ascending: false }),
