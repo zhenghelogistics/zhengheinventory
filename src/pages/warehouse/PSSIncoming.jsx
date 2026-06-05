@@ -156,13 +156,14 @@ export default function PSSIncoming() {
 
   async function confirmReceipt() {
     setSaving(true);
+    const today = new Date().toISOString().slice(0, 10);
     for (const line of lines) {
-      const qty = parseFloat(drafts[line.id]) || 0;
+      // Stamp qty_actual = qty_ordered (ground staff confirmed it matches)
       await supabase.from('stock_lines')
-        .update({ qty_actual: qty, date_in: new Date().toISOString().slice(0, 10) })
+        .update({ qty_actual: line.qty_ordered, date_in: today })
         .eq('id', line.id);
       await log('pss_receive', line.id, selected.movement_no, {
-        sku: line.sku, description: line.description, qty_confirmed: qty,
+        sku: line.sku, description: line.description, qty_confirmed: line.qty_ordered,
       });
     }
     await supabase.from('movements').update({ status: 'In Progress' }).eq('id', selected.id);
@@ -249,67 +250,40 @@ export default function PSSIncoming() {
           </div>
         ) : (
           <>
-            {/* Step 1: Count items */}
-            <StepCard number={1} title="Receive & Count" state={received ? 'done' : 'active'}>
-              {!received ? (
+            {/* Step 1: Verify items */}
+            <StepCard number={1} title="Verify Shipment" state={received ? 'done' : 'active'}>
+              {lines.length === 0 ? (
+                <div className="text-center py-4 text-slate-400 text-sm">No product lines on this shipment.</div>
+              ) : (
                 <>
-                  {lines.length === 0 ? (
-                    <div className="text-center py-4 text-slate-400 text-sm">No product lines on this shipment.</div>
-                  ) : (
-                    <div className="space-y-3 mb-4">
-                      {lines.map((line) => (
-                        <div key={line.id} className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
-                          <div className="mb-2">
-                            <div className="font-bold text-slate-800 text-sm leading-snug whitespace-pre-line">{line.description || '—'}</div>
-                            {line.sku && (
-                              <div className="text-[10px] font-mono text-slate-400 mt-0.5">HS: {line.sku}</div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                              <label className="text-[10px] font-semibold text-slate-400 block mb-1">
-                                Qty Received ({line.unit || 'PCS'})
-                                {line.qty_ordered ? <span className="ml-1 text-slate-300">· expected {line.qty_ordered}</span> : null}
-                              </label>
-                              <input
-                                type="number"
-                                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-800 text-lg font-bold focus:outline-none focus:border-teal-400 text-center"
-                                value={drafts[line.id] || ''}
-                                onChange={(e) => setDrafts((p) => ({ ...p, [line.id]: e.target.value }))}
-                                placeholder="0"
-                                inputMode="decimal"
-                              />
-                            </div>
-                          </div>
+                  <div className="space-y-2 mb-4">
+                    {lines.map((line) => (
+                      <div key={line.id} className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${received ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-200'}`}>
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-800 text-sm leading-snug whitespace-pre-line">{line.description || '—'}</div>
+                          {line.sku && <div className="text-[10px] font-mono text-slate-400 mt-0.5">HS: {line.sku}</div>}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {lines.length > 0 && (
+                        <div className="shrink-0 text-right">
+                          <div className="text-2xl font-black tabular-nums text-slate-800">{line.qty_ordered ?? '—'}</div>
+                          <div className="text-[10px] text-slate-400 font-semibold">{line.unit || 'PCS'}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {!received && (
                     <button
                       onClick={confirmReceipt}
                       disabled={saving}
                       className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
                     >
-                      {saving ? 'Saving…' : 'Save Quantities'}
+                      {saving ? (
+                        <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
+                      ) : (
+                        <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All Items Present — Confirm</>
+                      )}
                     </button>
                   )}
                 </>
-              ) : (
-                <div className="space-y-1.5">
-                  {lines.map((line) => (
-                    <div key={line.id} className="flex items-start justify-between py-1">
-                      <div className="min-w-0 mr-3">
-                        <div className="text-sm font-semibold text-slate-700 leading-snug whitespace-pre-line">{line.description || '—'}</div>
-                        {line.sku && <div className="text-[10px] font-mono text-slate-400">HS: {line.sku}</div>}
-                      </div>
-                      <span className="font-black text-emerald-700 tabular-nums shrink-0 mt-0.5">
-                        {drafts[line.id] || line.qty_actual || 0}{' '}
-                        <span className="font-normal text-xs text-slate-400">{line.unit || 'PCS'}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
               )}
             </StepCard>
 
