@@ -36,6 +36,8 @@ export default function PSSShipmentDetail() {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [creatingMovement, setCreatingMovement] = useState(false);
+  const [movementError, setMovementError] = useState(null);
 
   useEffect(() => { load(); }, [id]);
 
@@ -59,6 +61,53 @@ export default function PSSShipmentDetail() {
     await supabase.from('pss_shipments').update({ status: next }).eq('id', id);
     setShipment((p) => ({ ...p, status: next }));
     setUpdating(false);
+  }
+
+  async function createBroodMovement() {
+    if (!shipment || shipment.movement_id) return;
+    setCreatingMovement(true);
+    setMovementError(null);
+
+    const movNo = shipment.po_number || `PSS-${shipment.id.slice(0, 8).toUpperCase()}`;
+
+    const { data: mov, error: movErr } = await supabase
+      .from('movements')
+      .insert({
+        movement_no:      movNo,
+        type:             'Inbound',
+        status:           'New',
+        source:           'PSS',
+        company_name:     shipment.client_name,
+        reference_number: shipment.po_number,
+        date_in:          shipment.etd,
+      })
+      .select()
+      .single();
+
+    if (movErr || !mov) {
+      setMovementError(movErr?.message || 'Failed to create movement');
+      setCreatingMovement(false);
+      return;
+    }
+
+    // Create stock_lines in Brood from PSS product lines
+    if (lines.length > 0) {
+      await supabase.from('stock_lines').insert(
+        lines.map((l, i) => ({
+          movement_id: mov.id,
+          description: l.description,
+          sku:         l.hs_code || null,
+          qty_ordered: parseFloat(l.quantity) || 0,
+          unit:        l.unit || 'PCS',
+          sort_order:  i,
+        }))
+      );
+    }
+
+    // Link movement back to this PSS shipment
+    await supabase.from('pss_shipments').update({ movement_id: mov.id }).eq('id', id);
+    setShipment((p) => ({ ...p, movement_id: mov.id }));
+    setCreatingMovement(false);
   }
 
   if (loading) {
@@ -241,15 +290,43 @@ export default function PSSShipmentDetail() {
       )}
 
       {/* Brood link */}
-      <Section title="Warehouse Status">
+      <Section title="Warehouse Receiving Job">
         {shipment.movement_id ? (
-          <div className="flex items-center gap-2 text-emerald-600 text-xs font-semibold">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Inbound movement created in Brood — ground staff will receive via PSS Incoming
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-emerald-600 text-sm font-bold">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Receiving job created in Brood
+            </div>
+            <p className="text-slate-500 text-xs leading-relaxed">
+              Ground staff can see this shipment under <strong>Brood → PSS Incoming</strong>. They will count the items and sign off when goods arrive.
+            </p>
           </div>
         ) : (
-          <div className="text-slate-400 text-xs">
-            No warehouse movement linked yet. Submit the shipment to create one in Brood.
+          <div className="space-y-3">
+            <p className="text-slate-500 text-xs leading-relaxed">
+              No receiving job in Brood yet. Create one so ground staff can see the expected shipment and count items when goods arrive.
+            </p>
+            {movementError && (
+              <div className="text-red-500 text-xs font-semibold">{movementError}</div>
+            )}
+            <button
+              onClick={createBroodMovement}
+              disabled={creatingMovement}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-bold cursor-pointer hover:bg-teal-700 disabled:opacity-60"
+            >
+              {creatingMovement ? (
+                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Creating…</>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  Send to Brood — Create Receiving Job
+                </>
+              )}
+            </button>
           </div>
         )}
       </Section>
