@@ -18,6 +18,7 @@ import ShipmentDetail from './pages/warehouse/ShipmentDetail';
 import ScanClientQR from './pages/warehouse/ScanClientQR';
 import PickListsPage from './pages/warehouse/PickListsPage';
 import PickExecution from './pages/warehouse/PickExecution';
+import PSSIncoming from './pages/warehouse/PSSIncoming';
 import ActivityLogPage from './pages/ActivityLogPage';
 import { WarehouseAuthProvider } from './context/WarehouseAuthContext';
 
@@ -130,6 +131,7 @@ export default function App() {
           <Route path="scan-qr" element={<ScanClientQR />} />
           <Route path="pick-lists" element={<PickListsPage />} />
           <Route path="pick-lists/:id" element={<PickExecution />} />
+          <Route path="pss-incoming" element={<PSSIncoming />} />
         </Route>
         <Route path="/*" element={<MainApp />} />
       </Routes>
