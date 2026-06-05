@@ -4,6 +4,7 @@ import PortalSelectPage from './pages/PortalSelectPage';
 import PSSLayout from './pages/pss/PSSLayout';
 import PSSHome from './pages/pss/PSSHome';
 import NewShipment from './pages/pss/NewShipment';
+import PSSShipmentDetail from './pages/pss/PSSShipmentDetail';
 import PortalSwitcher from './components/PortalSwitcher';
 import MovementListPage from './pages/MovementListPage';
 import MovementDetailPage from './pages/MovementDetailPage';
@@ -118,6 +119,7 @@ export default function App() {
         <Route path="/" element={<PortalSelectPage />} />
         <Route path="/pss" element={<PSSLayout />}>
           <Route index element={<PSSHome />} />
+          <Route path="entry/:id" element={<PSSShipmentDetail />} />
           <Route path="new" element={<NewShipment />} />
         </Route>
         <Route path="/warehouse" element={<WarehouseLayout />}>

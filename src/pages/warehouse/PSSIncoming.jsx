@@ -98,31 +98,36 @@ export default function PSSIncoming() {
   async function load(quiet = false) {
     if (quiet) setRefreshing(true); else setLoading(true);
 
-    // Load movements with source='PSS', joined to pss_shipments for full details
+    // Get all pss_shipments that have a linked movement
+    const { data: pssData } = await supabase
+      .from('pss_shipments')
+      .select('*')
+      .not('movement_id', 'is', null);
+
+    const pssShipments = pssData || [];
+    const movIds = pssShipments.map((p) => p.movement_id).filter(Boolean);
+
+    if (movIds.length === 0) {
+      setMovements([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    const pssByMovId = {};
+    pssShipments.forEach((p) => { pssByMovId[p.movement_id] = p; });
+
     const [mvRes, confRes] = await Promise.all([
       supabase
         .from('movements')
         .select('id, movement_no, company_name, status, type, reference_number, date_in, created_at')
-        .eq('type', 'Inbound')
-        .eq('source', 'PSS')
+        .in('id', movIds)
         .in('status', ['New', 'In Progress'])
         .order('created_at', { ascending: false }),
       supabase.from('delivery_confirmations').select('*'),
     ]);
 
-    const movs = mvRes.data || [];
-
-    // Fetch PSS shipment details for each movement
-    if (movs.length > 0) {
-      const movIds = movs.map((m) => m.id);
-      const { data: pssData } = await supabase
-        .from('pss_shipments')
-        .select('*')
-        .in('movement_id', movIds);
-      const pssByMovId = {};
-      (pssData || []).forEach((p) => { pssByMovId[p.movement_id] = p; });
-      movs.forEach((m) => { m._pss = pssByMovId[m.id] || {}; });
-    }
+    const movs = (mvRes.data || []).map((m) => ({ ...m, _pss: pssByMovId[m.id] || {} }));
 
     setMovements(movs);
     const byMovId = {};
