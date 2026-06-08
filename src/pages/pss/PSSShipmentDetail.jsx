@@ -368,27 +368,44 @@ export default function PSSShipmentDetail() {
                   {warehouseLines.map((l) => {
                     const match = l.qty_actual == null || l.qty_actual === l.qty_ordered;
                     return (
-                      <div key={l.id} className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border ${match ? 'bg-white border-slate-100' : 'bg-red-50 border-red-200'}`}>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-slate-700 font-semibold text-xs leading-snug whitespace-pre-line">{l.description}</div>
-                          {l.sku && <div className="text-[10px] font-mono text-slate-400 mt-0.5">HS: {l.sku}</div>}
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-sm font-black tabular-nums text-slate-800">{l.qty_actual ?? l.qty_ordered ?? '—'}</div>
-                          {!match && l.qty_actual != null && (
-                            <div className="text-[10px] text-red-500 font-semibold">exp {l.qty_ordered}</div>
+                      <div key={l.id} className={`rounded-xl border overflow-hidden ${match ? 'bg-white border-slate-100' : 'bg-red-50 border-red-200'}`}>
+                        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-slate-700 font-semibold text-xs leading-snug whitespace-pre-line">{l.description}</div>
+                            {l.sku && <div className="text-[10px] font-mono text-slate-400 mt-0.5">HS: {l.sku}</div>}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-sm font-black tabular-nums text-slate-800">{l.qty_actual ?? l.qty_ordered ?? '—'}</div>
+                            {!match && l.qty_actual != null && (
+                              <div className="text-[10px] text-red-500 font-semibold">exp {l.qty_ordered}</div>
+                            )}
+                            <div className="text-[10px] text-slate-400">{l.unit || 'PCS'}</div>
+                          </div>
+                          {!match && (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
                           )}
-                          <div className="text-[10px] text-slate-400">{l.unit || 'PCS'}</div>
                         </div>
-                        {!match && (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                          </svg>
+                        {l.weight_kg != null && (
+                          <div className="flex items-center justify-between px-3 py-1.5 bg-amber-50/60 border-t border-amber-100">
+                            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Weight</span>
+                            <span className="text-[11px] font-black text-amber-800 tabular-nums">{Number(l.weight_kg).toLocaleString()} KG</span>
+                          </div>
                         )}
                       </div>
                     );
                   })}
+                  {/* Total weight row */}
+                  {warehouseLines.some((l) => l.weight_kg != null) && (
+                    <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 mt-1">
+                      <span className="text-xs font-black text-amber-700 uppercase tracking-wide">Total Gross Weight</span>
+                      <span className="text-lg font-black text-amber-800 tabular-nums">
+                        {warehouseLines.reduce((s, l) => s + (parseFloat(l.weight_kg) || 0), 0).toLocaleString()} KG
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

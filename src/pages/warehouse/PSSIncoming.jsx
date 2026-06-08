@@ -224,7 +224,7 @@ export default function PSSIncoming() {
   // POD flow: null | 'scanning' | 'signing' | 'done'
   const [podFlow, setPodFlow] = useState(null);
   const [podGenerating, setPodGenerating] = useState(false);
-  const [grossWeight, setGrossWeight] = useState('');
+  const [weights, setWeights] = useState({});
   const [reportGenerating, setReportGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [discrepancyMode, setDiscrepancyMode] = useState(false);
@@ -295,8 +295,13 @@ export default function PSSIncoming() {
     setLines(linesData);
     setConf(confRes.data || null);
     const init = {};
-    linesData.forEach((l) => { init[l.id] = String(l.qty_actual ?? ''); });
+    const wInit = {};
+    linesData.forEach((l) => {
+      init[l.id] = String(l.qty_actual ?? '');
+      wInit[l.id] = l.weight_kg != null ? String(l.weight_kg) : '';
+    });
     setDrafts(init);
+    setWeights(wInit);
     setDetailLoading(false);
   }
 
@@ -304,8 +309,9 @@ export default function PSSIncoming() {
     setSaving(true);
     const today = new Date().toISOString().slice(0, 10);
     for (const line of lines) {
+      const w = parseFloat(weights[line.id]);
       await supabase.from('stock_lines')
-        .update({ qty_actual: line.qty_ordered, date_in: today })
+        .update({ qty_actual: line.qty_ordered, date_in: today, ...(w > 0 ? { weight_kg: w } : {}) })
         .eq('id', line.id);
       await log('pss_receive', line.id, selected.movement_no, {
         sku: line.sku, description: line.description, qty_confirmed: line.qty_ordered,
@@ -313,14 +319,18 @@ export default function PSSIncoming() {
     }
     await supabase.from('movements').update({ status: 'In Progress' }).eq('id', selected.id);
 
-    // Save gross weight to pss_shipments if linked
-    if (grossWeight && meta?.id) {
+    const totalKg = Object.values(weights).reduce((s, w) => s + (parseFloat(w) || 0), 0);
+    if (totalKg > 0 && meta?.id) {
       await supabase.from('pss_shipments')
-        .update({ gross_weight_kg: parseFloat(grossWeight) })
+        .update({ gross_weight_kg: totalKg })
         .eq('id', meta.id);
-      setMeta((p) => ({ ...p, gross_weight_kg: parseFloat(grossWeight) }));
+      setMeta((p) => ({ ...p, gross_weight_kg: totalKg }));
     }
 
+    setLines((prev) => prev.map((l) => ({
+      ...l,
+      weight_kg: parseFloat(weights[l.id]) || l.weight_kg || null,
+    })));
     setSelected((p) => ({ ...p, status: 'In Progress' }));
     setReceived(true);
     setSaving(false);
@@ -330,11 +340,8 @@ export default function PSSIncoming() {
     setReportGenerating(true);
     try {
       await exportPSSLoadingReport({
-        movement: selected,
-        pssShipment: meta,
-        lines,
-        conf,
-        grossWeightKg: grossWeight || meta?.gross_weight_kg,
+        movement: selected, pssShipment: meta, lines, conf,
+        grossWeightKg: meta?.gross_weight_kg,
       });
     } catch (e) { console.error(e); }
     setReportGenerating(false);
@@ -351,11 +358,8 @@ export default function PSSIncoming() {
     }
     try {
       await exportPSSLoadingReport({
-        movement: selected,
-        pssShipment: { ...meta, gross_weight_kg: grossWeight || meta?.gross_weight_kg },
-        lines,
-        conf,
-        grossWeightKg: grossWeight || meta?.gross_weight_kg,
+        movement: selected, pssShipment: meta, lines, conf,
+        grossWeightKg: meta?.gross_weight_kg,
       });
     } catch (e) { console.error(e); }
     setSending(false);
@@ -553,49 +557,77 @@ export default function PSSIncoming() {
                 <div className="text-center py-4 text-slate-400 text-sm">No product lines on this shipment.</div>
               ) : (
                 <>
-                  <div className="space-y-2 mb-4">
-                    {lines.map((line) => (
-                      <div key={line.id} className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${received ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-200'}`}>
-                        <div className="min-w-0">
-                          <div className="font-bold text-slate-800 text-sm leading-snug whitespace-pre-line">{line.description || '—'}</div>
-                          {line.sku && <div className="text-[10px] font-mono text-slate-400 mt-0.5">HS: {line.sku}</div>}
+                  {(() => {
+                    const totalKg = Object.values(weights).reduce((s, w) => s + (parseFloat(w) || 0), 0);
+                    return (
+                      <>
+                        <div className="space-y-2 mb-3">
+                          {lines.map((line) => {
+                            const w = line.weight_kg ?? (received ? null : parseFloat(weights[line.id]) || null);
+                            return (
+                              <div key={line.id} className={`rounded-xl border overflow-hidden ${received ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-200'}`}>
+                                <div className="flex items-center justify-between gap-3 p-3">
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-slate-800 text-sm leading-snug whitespace-pre-line">{line.description || '—'}</div>
+                                    {line.sku && <div className="text-[10px] font-mono text-slate-400 mt-0.5">HS: {line.sku}</div>}
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    <div className="text-2xl font-black tabular-nums text-slate-800">{line.qty_ordered ?? '—'}</div>
+                                    <div className="text-[10px] text-slate-400 font-semibold">{line.unit || 'PCS'}</div>
+                                    {received && w != null && (
+                                      <div className="text-[10px] text-emerald-600 font-black mt-0.5 tabular-nums">{Number(w).toLocaleString()} KG</div>
+                                    )}
+                                  </div>
+                                </div>
+                                {!received && (
+                                  <div className="flex items-center gap-2 px-3 pb-3 border-t border-amber-100 pt-2 bg-amber-50/40">
+                                    <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide shrink-0">Weight</span>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      className="flex-1 px-3 py-1.5 rounded-lg border-2 border-amber-200 text-slate-800 text-sm font-black focus:outline-none focus:border-amber-400 text-right tabular-nums bg-white"
+                                      value={weights[line.id] || ''}
+                                      onChange={(e) => setWeights((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                                      placeholder="0"
+                                    />
+                                    <span className="text-xs font-bold text-amber-600 shrink-0">KG</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-2xl font-black tabular-nums text-slate-800">{line.qty_ordered ?? '—'}</div>
-                          <div className="text-[10px] text-slate-400 font-semibold">{line.unit || 'PCS'}</div>
+
+                        {/* Running total */}
+                        <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border mb-3 ${
+                          totalKg > 0 || (received && meta?.gross_weight_kg)
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-slate-50 border-slate-200'
+                        }`}>
+                          <span className="text-xs font-black text-amber-700 uppercase tracking-wide">Total Gross Weight</span>
+                          <span className={`font-black text-xl tabular-nums ${totalKg > 0 || meta?.gross_weight_kg ? 'text-amber-800' : 'text-slate-300'}`}>
+                            {((received ? meta?.gross_weight_kg : totalKg) || 0) > 0
+                              ? `${Number(received ? meta?.gross_weight_kg : totalKg).toLocaleString()} KG`
+                              : '— KG'}
+                          </span>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                  {!received && (
-                    <div className="space-y-3">
-                      {/* Gross weight — required before confirm */}
-                      <div className="bg-white rounded-xl border-2 border-amber-200 p-3">
-                        <label className="text-[10px] font-bold text-amber-600 uppercase tracking-wide block mb-2">
-                          Gross Weight Guesstimate (KG) <span className="text-red-400">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-800 text-xl font-black focus:outline-none focus:border-teal-400 text-center tabular-nums"
-                          value={grossWeight}
-                          onChange={(e) => setGrossWeight(e.target.value)}
-                          placeholder="e.g. 12500"
-                        />
-                      </div>
-                      <button
-                        onClick={confirmReceipt}
-                        disabled={saving || !grossWeight}
-                        className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-40 flex items-center justify-center gap-2"
-                      >
-                        {saving ? (
-                          <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
-                        ) : (
-                          <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All Items Present — Confirm</>
+
+                        {!received && (
+                          <button
+                            onClick={confirmReceipt}
+                            disabled={saving || totalKg === 0}
+                            className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-40 flex items-center justify-center gap-2"
+                          >
+                            {saving ? (
+                              <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
+                            ) : (
+                              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All Items Present — Confirm</>
+                            )}
+                          </button>
                         )}
-                      </button>
-                    </div>
-                  )}
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </StepCard>
