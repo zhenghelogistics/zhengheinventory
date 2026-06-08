@@ -38,6 +38,9 @@ export default function PSSShipmentDetail() {
   const [updating, setUpdating] = useState(false);
   const [creatingMovement, setCreatingMovement] = useState(false);
   const [movementError, setMovementError] = useState(null);
+  const [warehouseLines, setWarehouseLines] = useState([]);
+  const [warehouseConf, setWarehouseConf] = useState(null);
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
@@ -49,7 +52,27 @@ export default function PSSShipmentDetail() {
     ]);
     setShipment(s);
     setLines(l || []);
+
+    if (s?.movement_id) {
+      const [{ data: wl }, { data: wc }] = await Promise.all([
+        supabase.from('stock_lines').select('*').eq('movement_id', s.movement_id).order('sort_order').order('created_at'),
+        supabase.from('delivery_confirmations').select('*').eq('movement_id', s.movement_id).maybeSingle(),
+      ]);
+      setWarehouseLines(wl || []);
+      setWarehouseConf(wc || null);
+    }
+
     setLoading(false);
+  }
+
+  async function resolveDiscrepancy(action) {
+    if (!shipment?.id) return;
+    setResolving(true);
+    await supabase.from('pss_shipments')
+      .update({ discrepancy_status: action })
+      .eq('id', shipment.id);
+    setShipment((p) => ({ ...p, discrepancy_status: action }));
+    setResolving(false);
   }
 
   async function advanceStatus() {
@@ -291,6 +314,140 @@ export default function PSSShipmentDetail() {
         <Section title="Remarks">
           <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{shipment.remarks}</p>
         </Section>
+      )}
+
+      {/* Warehouse confirmation dock — visible once handover is confirmed */}
+      {shipment.movement_id && (
+        <div className="rounded-2xl border-2 border-teal-200 bg-teal-50/30 overflow-hidden">
+          {/* Dock header */}
+          <div className="px-5 py-3 bg-teal-700 flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 20h.01M7 20v-4"/><path d="M12 20V10"/><path d="M17 20V4"/><path d="M22 20h.01"/>
+            </svg>
+            <span className="text-white text-xs font-black uppercase tracking-widest">Warehouse Confirmation</span>
+            {shipment.report_sent_at && (
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+                Report sent {new Date(shipment.report_sent_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+
+          <div className="p-5 space-y-4">
+            {/* 3FA status pips */}
+            <div className="flex items-center justify-around">
+              {[
+                { label: 'Ground Staff', ts: warehouseConf?.factor1_confirmed_at, name: warehouseConf?.factor1_user_name },
+                { label: 'Admin', ts: warehouseConf?.factor2_confirmed_at, name: warehouseConf?.factor2_user_name },
+                { label: 'Driver Sign', ts: warehouseConf?.factor3_confirmed_at, name: warehouseConf?.inbound_signature_name || warehouseConf?.factor3_scanned_by_name },
+              ].map(({ label, ts, name }, i) => (
+                <div key={i} className="flex flex-col items-center gap-1.5">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white text-sm ${ts ? 'bg-teal-600' : 'bg-slate-200'}`}>
+                    {ts
+                      ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      : i + 1}
+                  </div>
+                  <span className={`text-[9px] font-bold text-center ${ts ? 'text-teal-700' : 'text-slate-400'}`}>{label}</span>
+                  {ts && <span className="text-[9px] text-teal-600 font-semibold text-center max-w-[64px] truncate">{name}</span>}
+                </div>
+              ))}
+            </div>
+
+            {/* Gross weight */}
+            {shipment.gross_weight_kg && (
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-teal-100/60 border border-teal-200">
+                <span className="text-teal-800 text-xs font-bold">Gross Weight Received</span>
+                <span className="text-teal-900 font-black text-lg tabular-nums">{Number(shipment.gross_weight_kg).toLocaleString()} KG</span>
+              </div>
+            )}
+
+            {/* Received quantities table */}
+            {warehouseLines.length > 0 && (
+              <div>
+                <div className="text-[10px] font-black text-teal-700 uppercase tracking-widest mb-2">Items Received</div>
+                <div className="space-y-1.5">
+                  {warehouseLines.map((l) => {
+                    const match = l.qty_actual == null || l.qty_actual === l.qty_ordered;
+                    return (
+                      <div key={l.id} className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border ${match ? 'bg-white border-slate-100' : 'bg-red-50 border-red-200'}`}>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-slate-700 font-semibold text-xs leading-snug whitespace-pre-line">{l.description}</div>
+                          {l.sku && <div className="text-[10px] font-mono text-slate-400 mt-0.5">HS: {l.sku}</div>}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-sm font-black tabular-nums text-slate-800">{l.qty_actual ?? l.qty_ordered ?? '—'}</div>
+                          {!match && l.qty_actual != null && (
+                            <div className="text-[10px] text-red-500 font-semibold">exp {l.qty_ordered}</div>
+                          )}
+                          <div className="text-[10px] text-slate-400">{l.unit || 'PCS'}</div>
+                        </div>
+                        {!match && (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                          </svg>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Discrepancy section */}
+            {shipment.discrepancy_status === 'flagged' && (
+              <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-red-700 font-black text-sm">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  Discrepancy Reported
+                </div>
+                {shipment.discrepancy_notes && (
+                  <p className="text-red-600 text-sm leading-relaxed">{shipment.discrepancy_notes}</p>
+                )}
+                <p className="text-red-500 text-xs">Please review and indicate how you'd like to proceed.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => resolveDiscrepancy('disputed')}
+                    disabled={resolving}
+                    className="h-11 rounded-xl border-2 border-red-400 text-red-600 font-bold text-sm cursor-pointer hover:bg-red-100 disabled:opacity-60"
+                  >
+                    Raise Dispute
+                  </button>
+                  <button
+                    onClick={() => resolveDiscrepancy('acknowledged')}
+                    disabled={resolving}
+                    className="h-11 rounded-xl bg-red-600 text-white font-bold text-sm cursor-pointer hover:bg-red-700 disabled:opacity-60"
+                  >
+                    Acknowledge
+                  </button>
+                </div>
+              </div>
+            )}
+            {shipment.discrepancy_status === 'acknowledged' && (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <span className="text-amber-700 text-xs font-bold">Discrepancy acknowledged — shipment proceeds as received</span>
+              </div>
+            )}
+            {shipment.discrepancy_status === 'disputed' && (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                <span className="text-red-700 text-xs font-bold">Dispute raised — warehouse will re-inspect and confirm</span>
+              </div>
+            )}
+
+            {/* No activity yet */}
+            {!warehouseConf && warehouseLines.length === 0 && (
+              <div className="text-center py-4 text-slate-400 text-xs">
+                Shipment handed over — awaiting warehouse confirmation
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Warehouse processing status — no internal tool names exposed */}

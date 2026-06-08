@@ -879,3 +879,247 @@ export async function exportPSSProofOfDelivery({ movement, pssShipment, lines, c
 
   doc.save(`POD-${poNo.replace(/[/\\]/g, '-')}.pdf`);
 }
+
+// ── PSS Loading / Incoming Report ─────────────────────────────────────────────
+export async function exportPSSLoadingReport({ movement, pssShipment, lines, conf, grossWeightKg }) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const today = new Date().toLocaleDateString('en-SG');
+  const now = new Date().toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const poNo = pssShipment?.po_number || movement?.movement_no || '—';
+
+  // ── Header band ─────────────────────────────────────────────────────────────
+  doc.setFillColor(6, 78, 59);
+  doc.rect(0, 0, W, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  const logo = await loadLogoBase64('/zhl-logo-white.png');
+  if (logo) doc.addImage(logo, 'PNG', 8, 3, 44, 15);
+  else { doc.setFontSize(11); doc.text(BRAND, 10, 14); }
+  doc.setFontSize(10);
+  doc.text('LOADING / INCOMING REPORT', W - 10, 14, { align: 'right' });
+
+  doc.setTextColor(60, 60, 60);
+  let y = 30;
+
+  // ── Shipment info ────────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(6, 78, 59);
+  doc.text('SHIPMENT DETAILS', 10, y);
+  doc.setTextColor(60, 60, 60);
+  doc.setFont('helvetica', 'normal');
+  y += 5;
+
+  const leftCol = [
+    ['PO / Reference',   poNo],
+    ['Client',           pssShipment?.client_name || movement?.company_name || '—'],
+    ['Consignee',        pssShipment?.consignee_name || '—'],
+    ['Export Type',      pssShipment?.export_type || '—'],
+    ['Shipment Date',    pssShipment?.shipment_date || '—'],
+    ['ETD',              pssShipment?.etd || movement?.date_in || '—'],
+  ];
+  const rightCol = [
+    ['Carrier',          pssShipment?.carrier || '—'],
+    ['Vessel / Voyage',  [pssShipment?.vessel, pssShipment?.voyage].filter(Boolean).join(' / ') || '—'],
+    ['BL Number',        pssShipment?.bl_number || '—'],
+    ['POL',              pssShipment?.pol || '—'],
+    ['POD',              pssShipment?.pod || '—'],
+    ['Container',        [pssShipment?.container_type, pssShipment?.container_no].filter(Boolean).join(' · ') || '—'],
+  ];
+
+  const startY = y;
+  leftCol.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'bold'); doc.text(`${label}:`, 10, y);
+    doc.setFont('helvetica', 'normal'); doc.text(String(value), 52, y);
+    y += 5;
+  });
+  y = startY;
+  rightCol.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'bold'); doc.text(`${label}:`, 110, y);
+    doc.setFont('helvetica', 'normal'); doc.text(String(value), 148, y);
+    y += 5;
+  });
+  y = startY + leftCol.length * 5 + 5;
+
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, y, W - 10, y);
+  y += 6;
+
+  // ── Items table ──────────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(6, 78, 59);
+  doc.text('CARGO RECEIVED', 10, y);
+  y += 3;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Description', 'HS Code', 'Expected Qty', 'Received Qty', 'Unit']],
+    body: (lines || []).map((l, i) => [
+      i + 1,
+      l.description || '—',
+      l.sku || l.hs_code || '—',
+      l.qty_ordered ?? '—',
+      l.qty_actual ?? l.qty_ordered ?? '—',
+      l.unit || 'PCS',
+    ]),
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [6, 78, 59], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+    columnStyles: {
+      0: { cellWidth: 10 },
+      2: { cellWidth: 26, font: 'courier' },
+      3: { cellWidth: 28, halign: 'right' },
+      4: { cellWidth: 28, halign: 'right' },
+      5: { cellWidth: 18 },
+    },
+    margin: { left: 10, right: 10 },
+  });
+
+  y = doc.lastAutoTable.finalY + 6;
+
+  // ── Weight & totals ──────────────────────────────────────────────────────────
+  doc.setFillColor(240, 253, 244);
+  doc.roundedRect(10, y, W - 20, 14, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(6, 78, 59);
+  doc.text('Gross Weight (guesstimate):', 15, y + 9);
+  doc.setFontSize(11);
+  doc.text(grossWeightKg ? `${Number(grossWeightKg).toLocaleString()} KG` : 'Not recorded', W - 15, y + 9, { align: 'right' });
+  y += 20;
+
+  // ── Confirmation record ──────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(6, 78, 59);
+  doc.text('CONFIRMATION RECORD', 10, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+
+  const fmtTs = (ts) => ts ? new Date(ts).toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pending';
+  const factors = [
+    ['F1 — Ground Staff sign-off', conf?.factor1_user_name, conf?.factor1_confirmed_at],
+    ['F2 — Admin approval',        conf?.factor2_user_name, conf?.factor2_confirmed_at],
+    ['F3 — Delivery driver sign',  conf?.factor3_scanned_by_name || conf?.inbound_signature_name, conf?.factor3_confirmed_at],
+  ];
+  factors.forEach(([label, name, ts]) => {
+    const done = !!ts;
+    doc.setFillColor(done ? 240 : 248, done ? 253 : 250, done ? 244 : 252);
+    doc.roundedRect(10, y - 4, W - 20, 10, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(done ? 6 : 100, done ? 78 : 100, done ? 59 : 100);
+    doc.text(label, 14, y + 2);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    const right = [name, fmtTs(ts)].filter(Boolean).join('   ');
+    doc.text(right, W - 14, y + 2, { align: 'right' });
+    y += 12;
+  });
+
+  y += 3;
+
+  // ── Signature preview (if available) ────────────────────────────────────────
+  if (conf?.inbound_signature_data) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(6, 78, 59);
+    doc.text('DRIVER SIGNATURE', 10, y);
+    y += 4;
+    doc.setTextColor(60, 60, 60);
+    doc.setFont('helvetica', 'normal');
+    if (conf.inbound_signature_name) { doc.text(`Driver: ${conf.inbound_signature_name}`, 10, y); y += 5; }
+    try { doc.addImage(conf.inbound_signature_data, 'PNG', 10, y, 70, 22); } catch {}
+    y += 26;
+  }
+
+  // ── Footer ───────────────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7);
+  doc.setTextColor(150, 150, 150);
+  doc.text(`Report generated: ${now}`, 10, y + 4);
+
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, pageH - 12, W - 10, pageH - 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(180, 180, 180);
+  doc.text(`${BRAND} · ${poNo} · Generated ${today}`, W / 2, pageH - 7, { align: 'center' });
+
+  doc.save(`LoadingReport-${poNo.replace(/[/\\]/g, '-')}.pdf`);
+}
+
+export async function exportPSSBulkLoadingReport(reports) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const today = new Date().toLocaleDateString('en-SG');
+  const now = new Date().toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  doc.setFillColor(6, 78, 59);
+  doc.rect(0, 0, W, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  const logo = await loadLogoBase64('/zhl-logo-white.png');
+  if (logo) doc.addImage(logo, 'PNG', 8, 3, 44, 15);
+  else { doc.setFontSize(11); doc.text(BRAND, 10, 14); }
+  doc.setFontSize(10);
+  doc.text('BULK INCOMING REPORT', W - 10, 14, { align: 'right' });
+
+  doc.setTextColor(60, 60, 60);
+  let y = 30;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`Report generated: ${now}   ·   Total shipments: ${reports.length}`, 10, y);
+  y += 8;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['PO / Ref', 'Client', 'Vessel · Voyage', 'Container', 'Items', 'Total Qty', 'Gross Wt (KG)', 'Status']],
+    body: reports.map(({ movement, pssShipment, lines }) => {
+      const totalQty = (lines || []).reduce((s, l) => s + (parseFloat(l.qty_actual ?? l.qty_ordered) || 0), 0);
+      const gw = pssShipment?.gross_weight_kg;
+      return [
+        pssShipment?.po_number || movement?.movement_no || '—',
+        pssShipment?.client_name || movement?.company_name || '—',
+        [pssShipment?.vessel, pssShipment?.voyage].filter(Boolean).join(' · ') || '—',
+        [pssShipment?.container_type, pssShipment?.container_no].filter(Boolean).join(' ') || '—',
+        (lines || []).length,
+        totalQty.toLocaleString(),
+        gw ? Number(gw).toLocaleString() : '—',
+        movement?.status || '—',
+      ];
+    }),
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [6, 78, 59], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+    columnStyles: { 5: { halign: 'right' }, 6: { halign: 'right' } },
+    margin: { left: 10, right: 10 },
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  const totalGross = reports.reduce((s, r) => s + (parseFloat(r.pssShipment?.gross_weight_kg) || 0), 0);
+  const totalItems = reports.reduce((s, r) => s + (r.lines || []).length, 0);
+  const totalQtyAll = reports.reduce((s, r) => s + (r.lines || []).reduce((ss, l) => ss + (parseFloat(l.qty_actual ?? l.qty_ordered) || 0), 0), 0);
+
+  doc.setFillColor(240, 253, 244);
+  doc.roundedRect(10, y, W - 20, 24, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(6, 78, 59);
+  doc.text(`Shipments: ${reports.length}`, 15, y + 7);
+  doc.text(`Line Items: ${totalItems}`, 15, y + 14);
+  doc.text(`Combined Gross Weight: ${totalGross > 0 ? totalGross.toLocaleString() + ' KG' : 'N/A'}`, 15, y + 21);
+  doc.text(`Total Qty Received: ${totalQtyAll.toLocaleString()}`, W - 15, y + 7, { align: 'right' });
+
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, pageH - 12, W - 10, pageH - 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(180, 180, 180);
+  doc.text(`${BRAND} · Bulk Loading Report · Generated ${today}`, W / 2, pageH - 7, { align: 'center' });
+
+  doc.save(`BulkLoadingReport-${today.replace(/\//g, '-')}.pdf`);
+}

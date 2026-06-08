@@ -106,3 +106,10 @@ ALTER TABLE pss_shipment_lines ENABLE ROW LEVEL SECURITY;
 -- Allow all authenticated users full access (tighten per-role later)
 CREATE POLICY "pss_shipments_all"      ON pss_shipments      FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "pss_shipment_lines_all" ON pss_shipment_lines FOR ALL USING (true) WITH CHECK (true);
+
+-- ── Column additions (run after initial schema) ──────────────
+ALTER TABLE pss_shipments ADD COLUMN IF NOT EXISTS gross_weight_kg    NUMERIC(10,2);
+ALTER TABLE pss_shipments ADD COLUMN IF NOT EXISTS discrepancy_status TEXT DEFAULT NULL; -- flagged | acknowledged | disputed
+ALTER TABLE pss_shipments ADD COLUMN IF NOT EXISTS discrepancy_notes  TEXT;
+ALTER TABLE pss_shipments ADD COLUMN IF NOT EXISTS report_sent_at     TIMESTAMPTZ;
+ALTER TABLE pss_shipments ADD COLUMN IF NOT EXISTS report_sent_by     TEXT;

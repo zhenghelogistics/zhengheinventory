@@ -3,7 +3,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../../lib/supabase';
 import { useWarehouseAuth } from '../../context/WarehouseAuthContext';
 import { useWarehouseLog } from '../../hooks/useWarehouseLog';
-import { exportPSSProofOfDelivery } from '../../utils/pdfExports';
+import { exportPSSProofOfDelivery, exportPSSLoadingReport, exportPSSBulkLoadingReport } from '../../utils/pdfExports';
 
 // ── Signature pad ─────────────────────────────────────────────────────────────
 function SignaturePad({ onSave, onBack }) {
@@ -224,6 +224,13 @@ export default function PSSIncoming() {
   // POD flow: null | 'scanning' | 'signing' | 'done'
   const [podFlow, setPodFlow] = useState(null);
   const [podGenerating, setPodGenerating] = useState(false);
+  const [grossWeight, setGrossWeight] = useState('');
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [discrepancyMode, setDiscrepancyMode] = useState(false);
+  const [discrepancyNotes, setDiscrepancyNotes] = useState('');
+  const [flagging, setFlagging] = useState(false);
+  const [bulkGenerating, setBulkGenerating] = useState(false);
 
   useEffect(() => {
     load();
@@ -297,7 +304,6 @@ export default function PSSIncoming() {
     setSaving(true);
     const today = new Date().toISOString().slice(0, 10);
     for (const line of lines) {
-      // Stamp qty_actual = qty_ordered (ground staff confirmed it matches)
       await supabase.from('stock_lines')
         .update({ qty_actual: line.qty_ordered, date_in: today })
         .eq('id', line.id);
@@ -306,9 +312,83 @@ export default function PSSIncoming() {
       });
     }
     await supabase.from('movements').update({ status: 'In Progress' }).eq('id', selected.id);
+
+    // Save gross weight to pss_shipments if linked
+    if (grossWeight && meta?.id) {
+      await supabase.from('pss_shipments')
+        .update({ gross_weight_kg: parseFloat(grossWeight) })
+        .eq('id', meta.id);
+      setMeta((p) => ({ ...p, gross_weight_kg: parseFloat(grossWeight) }));
+    }
+
     setSelected((p) => ({ ...p, status: 'In Progress' }));
     setReceived(true);
     setSaving(false);
+  }
+
+  async function generateLoadingReport() {
+    setReportGenerating(true);
+    try {
+      await exportPSSLoadingReport({
+        movement: selected,
+        pssShipment: meta,
+        lines,
+        conf,
+        grossWeightKg: grossWeight || meta?.gross_weight_kg,
+      });
+    } catch (e) { console.error(e); }
+    setReportGenerating(false);
+  }
+
+  async function sendLoadingReport() {
+    setSending(true);
+    const now = new Date().toISOString();
+    if (meta?.id) {
+      await supabase.from('pss_shipments')
+        .update({ report_sent_at: now, report_sent_by: user?.name || 'Warehouse' })
+        .eq('id', meta.id);
+      setMeta((p) => ({ ...p, report_sent_at: now, report_sent_by: user?.name || 'Warehouse' }));
+    }
+    try {
+      await exportPSSLoadingReport({
+        movement: selected,
+        pssShipment: { ...meta, gross_weight_kg: grossWeight || meta?.gross_weight_kg },
+        lines,
+        conf,
+        grossWeightKg: grossWeight || meta?.gross_weight_kg,
+      });
+    } catch (e) { console.error(e); }
+    setSending(false);
+  }
+
+  async function flagDiscrepancy() {
+    if (!meta?.id || !discrepancyNotes.trim()) return;
+    setFlagging(true);
+    await supabase.from('pss_shipments')
+      .update({ discrepancy_status: 'flagged', discrepancy_notes: discrepancyNotes.trim() })
+      .eq('id', meta.id);
+    setMeta((p) => ({ ...p, discrepancy_status: 'flagged', discrepancy_notes: discrepancyNotes.trim() }));
+    setDiscrepancyMode(false);
+    setFlagging(false);
+  }
+
+  async function generateBulkReport() {
+    setBulkGenerating(true);
+    const { data: allMovs } = await supabase
+      .from('movements')
+      .select('*')
+      .eq('source', 'PSS')
+      .in('status', ['In Progress', 'Completed']);
+    const reports = [];
+    for (const mov of (allMovs || [])) {
+      const [{ data: lns }, { data: pss }] = await Promise.all([
+        supabase.from('stock_lines').select('*').eq('movement_id', mov.id),
+        supabase.from('pss_shipments').select('*').eq('movement_id', mov.id).maybeSingle(),
+      ]);
+      reports.push({ movement: mov, lines: lns || [], pssShipment: pss || {} });
+    }
+    try { await exportPSSBulkLoadingReport(reports); } catch (e) { console.error(e); }
+    setBulkGenerating(false);
   }
 
   async function confirmFactor1() {
@@ -488,17 +568,33 @@ export default function PSSIncoming() {
                     ))}
                   </div>
                   {!received && (
-                    <button
-                      onClick={confirmReceipt}
-                      disabled={saving}
-                      className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
-                    >
-                      {saving ? (
-                        <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
-                      ) : (
-                        <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All Items Present — Confirm</>
-                      )}
-                    </button>
+                    <div className="space-y-3">
+                      {/* Gross weight — required before confirm */}
+                      <div className="bg-white rounded-xl border-2 border-amber-200 p-3">
+                        <label className="text-[10px] font-bold text-amber-600 uppercase tracking-wide block mb-2">
+                          Gross Weight Guesstimate (KG) <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-800 text-xl font-black focus:outline-none focus:border-teal-400 text-center tabular-nums"
+                          value={grossWeight}
+                          onChange={(e) => setGrossWeight(e.target.value)}
+                          placeholder="e.g. 12500"
+                        />
+                      </div>
+                      <button
+                        onClick={confirmReceipt}
+                        disabled={saving || !grossWeight}
+                        className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-40 flex items-center justify-center gap-2"
+                      >
+                        {saving ? (
+                          <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
+                        ) : (
+                          <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All Items Present — Confirm</>
+                        )}
+                      </button>
+                    </div>
                   )}
                 </>
               )}
@@ -574,6 +670,96 @@ export default function PSSIncoming() {
                 </div>
               )}
             </StepCard>
+
+            {/* ── Actions: Send Report + Flag Discrepancy ───────────────────── */}
+            {received && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Actions</h3>
+
+                {/* Send Loading Report to PSS */}
+                <button
+                  onClick={sendLoadingReport}
+                  disabled={sending}
+                  className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {sending ? (
+                    <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Sending…</>
+                  ) : (
+                    <>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                      </svg>
+                      Send Loading Report to PSS
+                    </>
+                  )}
+                </button>
+
+                {meta.report_sent_at && (
+                  <div className="flex items-center gap-2 text-emerald-600 text-xs font-semibold">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Report sent {new Date(meta.report_sent_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · {meta.report_sent_by}
+                  </div>
+                )}
+
+                <div className="border-t border-slate-100" />
+
+                {/* Discrepancy */}
+                {meta.discrepancy_status === 'flagged' ? (
+                  <div className="rounded-xl bg-red-50 border border-red-200 p-3 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-red-700 font-bold text-xs">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                      Discrepancy flagged — awaiting PSS response
+                    </div>
+                    <p className="text-red-600 text-[11px] leading-relaxed">{meta.discrepancy_notes}</p>
+                  </div>
+                ) : meta.discrepancy_status === 'acknowledged' ? (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span className="text-amber-700 text-xs font-bold">PSS acknowledged the discrepancy</span>
+                  </div>
+                ) : meta.discrepancy_status === 'disputed' ? (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                    </svg>
+                    <span className="text-red-700 text-xs font-bold">PSS disputes this — re-inspection required</span>
+                  </div>
+                ) : discrepancyMode ? (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={3}
+                      className="w-full px-3 py-2.5 rounded-xl border-2 border-red-200 text-slate-700 text-sm resize-none focus:outline-none focus:border-red-400 placeholder-slate-300"
+                      placeholder="Describe the discrepancy — e.g. 'Box 3 damaged, missing 50 units of SKU-001'"
+                      value={discrepancyNotes}
+                      onChange={(e) => setDiscrepancyNotes(e.target.value)}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => { setDiscrepancyMode(false); setDiscrepancyNotes(''); }} className="h-10 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm cursor-pointer active:bg-slate-200">
+                        Cancel
+                      </button>
+                      <button
+                        onClick={flagDiscrepancy}
+                        disabled={flagging || !discrepancyNotes.trim()}
+                        className="h-10 rounded-xl bg-red-600 text-white font-bold text-sm cursor-pointer active:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      >
+                        {flagging ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : null}
+                        Send Flag
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setDiscrepancyMode(true)}
+                    className="w-full h-11 rounded-xl border-2 border-red-200 text-red-600 font-bold text-sm cursor-pointer hover:bg-red-50 active:bg-red-100"
+                  >
+                    Flag Discrepancy
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -593,17 +779,33 @@ export default function PSSIncoming() {
           <h2 className="text-lg font-bold text-slate-800">Incoming Shipments</h2>
           <p className="text-slate-500 text-xs mt-0.5">Shipments created from PSS portal</p>
         </div>
-        <button
-          onClick={() => load(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold active:bg-slate-200 cursor-pointer disabled:opacity-50"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'animate-spin' : ''}>
-            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-          </svg>
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={generateBulkReport}
+            disabled={bulkGenerating || movements.filter((m) => m.status === 'In Progress').length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold active:bg-teal-700 cursor-pointer disabled:opacity-40"
+          >
+            {bulkGenerating ? (
+              <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            )}
+            {bulkGenerating ? 'Generating…' : 'Bulk Report'}
+          </button>
+          <button
+            onClick={() => load(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold active:bg-slate-200 cursor-pointer disabled:opacity-50"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'animate-spin' : ''}>
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {movements.length === 0 ? (
