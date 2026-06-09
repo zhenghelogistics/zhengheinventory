@@ -311,9 +311,16 @@ export default function PSSIncoming() {
     const today = new Date().toISOString().slice(0, 10);
     for (const line of lines) {
       const w = parseFloat(weights[line.id]);
+      // Save qty_actual first — this is the critical update
       await supabase.from('stock_lines')
-        .update({ qty_actual: line.qty_ordered, date_in: today, ...(w > 0 ? { weight_kg: w } : {}) })
+        .update({ qty_actual: line.qty_ordered, date_in: today })
         .eq('id', line.id);
+      // Save weight separately — fails gracefully if column not yet added
+      if (w > 0) {
+        await supabase.from('stock_lines')
+          .update({ weight_kg: w })
+          .eq('id', line.id);
+      }
       await log('pss_receive', line.id, selected.movement_no, {
         sku: line.sku, description: line.description, qty_confirmed: line.qty_ordered,
       });

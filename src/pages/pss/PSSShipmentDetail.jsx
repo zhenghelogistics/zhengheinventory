@@ -216,6 +216,7 @@ export default function PSSShipmentDetail() {
           sku:         l.hs_code || null,
           qty_ordered: parseFloat(l.quantity) || 0,
           unit:        l.unit || 'PCS',
+          weight_kg:   parseFloat(l.weight_kg) || null,
           sort_order:  i,
         }))
       );

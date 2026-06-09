@@ -15,6 +15,7 @@ const emptyLine = () => ({
   unit: 'PCS',
   unit_price: '',
   currency: 'USD',
+  weight_kg: '',
 });
 
 function SectionHeader({ step, title, subtitle }) {
@@ -99,6 +100,8 @@ export default function NewShipment() {
     const price = parseFloat(l.unit_price) || 0;
     return sum + qty * price;
   }, 0);
+
+  const totalWeight = lines.reduce((sum, l) => sum + (parseFloat(l.weight_kg) || 0), 0);
 
   const currency = lines[0]?.currency || 'USD';
 
@@ -212,6 +215,7 @@ export default function NewShipment() {
           unit:          l.unit || 'PCS',
           unit_price:    parseFloat(l.unit_price) || null,
           currency:      l.currency || 'USD',
+          weight_kg:     parseFloat(l.weight_kg) || null,
           extended_cost: (parseFloat(l.quantity) || 0) * (parseFloat(l.unit_price) || 0) || null,
           sort_order:    i,
         }))
@@ -416,15 +420,15 @@ export default function NewShipment() {
           <SectionHeader step={3} title="Product Lines" subtitle="Each row = one HS code item. Add as many rows as needed." />
 
           {/* Column headers */}
-          <div className="hidden sm:grid sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 mb-2 px-1">
-            {['Description', 'HS Code', 'Qty', 'Unit', 'Unit Price', 'Currency', ''].map((h) => (
+          <div className="hidden sm:grid sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_0.7fr_auto] gap-2 mb-2 px-1">
+            {['Description', 'HS Code', 'Qty', 'Unit', 'Unit Price', 'Currency', 'Wt (KG)', ''].map((h) => (
               <div key={h} className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{h}</div>
             ))}
           </div>
 
           <div className="space-y-2">
             {lines.map((line, idx) => (
-              <div key={line._id} className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 items-center p-3 sm:p-1 rounded-lg sm:rounded-none border sm:border-0 border-slate-100">
+              <div key={line._id} className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_0.7fr_auto] gap-2 items-center p-3 sm:p-1 rounded-lg sm:rounded-none border sm:border-0 border-slate-100">
                 {/* Mobile label */}
                 <div className="sm:hidden text-[10px] font-bold text-slate-400 mb-1">Item {idx + 1}</div>
 
@@ -463,6 +467,15 @@ export default function NewShipment() {
                 <select className={sel} value={line.currency} onChange={(e) => setLine(line._id, 'currency', e.target.value)}>
                   {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
                 </select>
+                <input
+                  type="number"
+                  className={`${inp} tabular-nums`}
+                  value={line.weight_kg}
+                  onChange={(e) => setLine(line._id, 'weight_kg', e.target.value)}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                />
                 <button
                   onClick={() => lines.length > 1 && removeLine(line._id)}
                   disabled={lines.length === 1}
@@ -486,14 +499,24 @@ export default function NewShipment() {
               </svg>
               Add Item
             </button>
-            {totalValue > 0 && (
-              <div className="text-right">
-                <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Total FOB Value</div>
-                <div className="text-lg font-black text-slate-800 tabular-nums">
-                  {totalValue.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-semibold text-slate-400">{currency}</span>
+            <div className="flex items-center gap-6">
+              {totalWeight > 0 && (
+                <div className="text-right">
+                  <div className="text-[10px] text-amber-500 font-semibold uppercase tracking-wide">Total Weight</div>
+                  <div className="text-lg font-black text-slate-800 tabular-nums">
+                    {totalWeight.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-semibold text-slate-400">KG</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+              {totalValue > 0 && (
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Total FOB Value</div>
+                  <div className="text-lg font-black text-slate-800 tabular-nums">
+                    {totalValue.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-semibold text-slate-400">{currency}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
