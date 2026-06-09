@@ -237,6 +237,7 @@ export default function PSSIncoming() {
     const channel = supabase
       .channel('pss_incoming_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_confirmations' }, () => load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'movements' }, () => load(true))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);

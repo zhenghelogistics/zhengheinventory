@@ -47,6 +47,9 @@ export default function PSSShipmentDetail() {
   const [permitExtracted, setPermitExtracted] = useState(null);
   const [applyingPermit, setApplyingPermit] = useState(false);
   const permitInputRef = useRef(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   useEffect(() => { load(); }, [id]);
 
@@ -128,6 +131,43 @@ export default function PSSShipmentDetail() {
     setShipment((p) => ({ ...p, ...updates }));
     setPermitExtracted(null);
     setApplyingPermit(false);
+  }
+
+  async function deleteEntry() {
+    setDeleting(true);
+    setDeleteError(null);
+
+    // If a Brood movement exists, check its status before allowing delete
+    if (shipment.movement_id) {
+      const { data: mov } = await supabase
+        .from('movements')
+        .select('id, status')
+        .eq('id', shipment.movement_id)
+        .single();
+
+      if (mov && mov.status !== 'New') {
+        setDeleteError('Cannot delete — warehouse has already started processing this shipment. Contact operations to cancel.');
+        setDeleting(false);
+        setDeleteConfirm(false);
+        return;
+      }
+
+      // Safe to delete: remove stock_lines and the movement
+      await supabase.from('stock_lines').delete().eq('movement_id', shipment.movement_id);
+      await supabase.from('delivery_confirmations').delete().eq('movement_id', shipment.movement_id);
+      await supabase.from('movements').delete().eq('id', shipment.movement_id);
+    }
+
+    // Delete PSS lines then shipment (lines cascade but explicit is safer)
+    await supabase.from('pss_shipment_lines').delete().eq('shipment_id', id);
+    const { error } = await supabase.from('pss_shipments').delete().eq('id', id);
+    if (error) {
+      setDeleteError(error.message);
+      setDeleting(false);
+      return;
+    }
+
+    navigate('/pss');
   }
 
   async function advanceStatus() {
@@ -221,15 +261,47 @@ export default function PSSShipmentDetail() {
     <div className="max-w-3xl mx-auto px-5 py-6 pb-10 space-y-4">
       {/* Header */}
       <div>
-        <button
-          onClick={() => navigate('/pss')}
-          className="text-emerald-600 text-sm font-semibold flex items-center gap-1 mb-3 cursor-pointer"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 5l-7 7 7 7"/>
-          </svg>
-          Back
-        </button>
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => navigate('/pss')}
+            className="text-emerald-600 text-sm font-semibold flex items-center gap-1 cursor-pointer"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+            Back
+          </button>
+          {!deleteConfirm ? (
+            <button
+              onClick={() => { setDeleteConfirm(true); setDeleteError(null); }}
+              className="flex items-center gap-1.5 text-xs font-semibold text-red-400 hover:text-red-600 cursor-pointer px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+              </svg>
+              Delete Entry
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-semibold">Are you sure?</span>
+              <button onClick={() => { setDeleteConfirm(false); setDeleteError(null); }} className="text-xs font-bold text-slate-400 cursor-pointer px-2 py-1 hover:text-slate-600">Cancel</button>
+              <button
+                onClick={deleteEntry}
+                disabled={deleting}
+                className="text-xs font-black text-white bg-red-600 hover:bg-red-700 cursor-pointer px-3 py-1.5 rounded-lg disabled:opacity-60 flex items-center gap-1"
+              >
+                {deleting ? <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : null}
+                {deleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+            </div>
+          )}
+        </div>
+        {deleteError && (
+          <div className="mb-3 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-semibold">
+            {deleteError}
+          </div>
+        )}
 
         <div className="flex items-start justify-between gap-3">
           <div>
