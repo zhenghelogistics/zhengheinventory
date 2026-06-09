@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { extractPermit } from '../../services/extractionService';
 
 const STATUS_ORDER = ['Draft', 'Submitted', 'Permit Issued', 'Completed'];
 const STATUS_STYLES = {
@@ -41,6 +42,11 @@ export default function PSSShipmentDetail() {
   const [warehouseLines, setWarehouseLines] = useState([]);
   const [warehouseConf, setWarehouseConf] = useState(null);
   const [resolving, setResolving] = useState(false);
+  const [permitProgress, setPermitProgress] = useState('');
+  const [permitExtracting, setPermitExtracting] = useState(false);
+  const [permitExtracted, setPermitExtracted] = useState(null);
+  const [applyingPermit, setApplyingPermit] = useState(false);
+  const permitInputRef = useRef(null);
 
   useEffect(() => { load(); }, [id]);
 
@@ -73,6 +79,55 @@ export default function PSSShipmentDetail() {
       .eq('id', shipment.id);
     setShipment((p) => ({ ...p, discrepancy_status: action }));
     setResolving(false);
+  }
+
+  async function handlePermitFile(file) {
+    if (!file) return;
+    setPermitExtracting(true);
+    setPermitExtracted(null);
+    setPermitProgress('');
+    try {
+      // Upload to Supabase Storage (non-blocking — skip if bucket missing)
+      let pdfUrl = null;
+      try {
+        const path = `${id}/permit-${Date.now()}.pdf`;
+        const { error: upErr } = await supabase.storage.from('permit-pdfs').upload(path, file, { upsert: true, contentType: 'application/pdf' });
+        if (!upErr) {
+          const { data: { publicUrl } } = supabase.storage.from('permit-pdfs').getPublicUrl(path);
+          pdfUrl = publicUrl;
+          await supabase.from('pss_shipments').update({ permit_pdf_url: pdfUrl }).eq('id', id);
+          setShipment((p) => ({ ...p, permit_pdf_url: pdfUrl }));
+        }
+      } catch { /* storage bucket may not exist yet — continue to extraction */ }
+
+      const data = await extractPermit(file, (msg) => setPermitProgress(msg));
+      setPermitExtracted(data);
+    } catch (err) {
+      setPermitProgress(`Error: ${err.message}`);
+    } finally {
+      setPermitExtracting(false);
+    }
+  }
+
+  async function applyPermitData() {
+    if (!permitExtracted || !shipment?.id) return;
+    setApplyingPermit(true);
+    const updates = {
+      permit_number:     permitExtracted.permit_number || null,
+      permit_issue_date: permitExtracted.issue_date || permitExtracted.declaration_date || null,
+      permit_valid_until: permitExtracted.valid_until || null,
+      permit_data:       permitExtracted,
+      permit_uploaded_at: new Date().toISOString(),
+      // Backfill shipping fields if currently empty
+      ...((!shipment.bl_number && permitExtracted.bl_number) ? { bl_number: permitExtracted.bl_number } : {}),
+      ...((!shipment.vessel && permitExtracted.vessel) ? { vessel: permitExtracted.vessel } : {}),
+      ...((!shipment.voyage && permitExtracted.voyage) ? { voyage: permitExtracted.voyage } : {}),
+      ...((!shipment.container_no && permitExtracted.container_no) ? { container_no: permitExtracted.container_no } : {}),
+    };
+    await supabase.from('pss_shipments').update(updates).eq('id', id);
+    setShipment((p) => ({ ...p, ...updates }));
+    setPermitExtracted(null);
+    setApplyingPermit(false);
   }
 
   async function advanceStatus() {
@@ -114,7 +169,7 @@ export default function PSSShipmentDetail() {
 
     // Create stock_lines in Brood from PSS product lines
     if (lines.length > 0) {
-      await supabase.from('stock_lines').insert(
+      const { error: linesErr } = await supabase.from('stock_lines').insert(
         lines.map((l, i) => ({
           movement_id: mov.id,
           description: l.description,
@@ -124,6 +179,9 @@ export default function PSSShipmentDetail() {
           sort_order:  i,
         }))
       );
+      if (linesErr) {
+        setMovementError(`Movement created but product lines failed to sync: ${linesErr.message}. Brood can still confirm receipt.`);
+      }
     }
 
     // Link movement back to this PSS shipment
@@ -466,6 +524,101 @@ export default function PSSShipmentDetail() {
           </div>
         </div>
       )}
+
+      {/* Permit Document — upload PDF, extract data, apply to shipment */}
+      <Section title="Permit Document">
+        <input
+          ref={permitInputRef}
+          type="file"
+          accept=".pdf,image/*"
+          className="hidden"
+          onChange={(e) => handlePermitFile(e.target.files?.[0])}
+        />
+
+        {/* Already applied permit data */}
+        {shipment.permit_number && (
+          <div className="space-y-1 mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 uppercase tracking-widest">Permit Applied</span>
+              {shipment.permit_pdf_url && (
+                <a href={shipment.permit_pdf_url} target="_blank" rel="noopener noreferrer"
+                  className="text-[10px] font-semibold text-emerald-600 underline underline-offset-2">
+                  View PDF
+                </a>
+              )}
+            </div>
+            <Row label="Permit No." value={shipment.permit_number} />
+            <Row label="Issue Date" value={shipment.permit_issue_date} />
+            <Row label="Valid Until" value={shipment.permit_valid_until} />
+            {shipment.permit_data?.permit_type && <Row label="Type" value={shipment.permit_data.permit_type} />}
+            {shipment.permit_data?.exporter_uen && <Row label="UEN" value={shipment.permit_data.exporter_uen} />}
+          </div>
+        )}
+
+        {/* Extracted preview — not yet applied */}
+        {permitExtracted && (
+          <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 mb-3 space-y-2">
+            <div className="text-xs font-black text-emerald-700 uppercase tracking-widest mb-1">Extracted — Review & Apply</div>
+            {[
+              ['Permit No.', permitExtracted.permit_number],
+              ['Type', permitExtracted.permit_type],
+              ['Issue Date', permitExtracted.issue_date || permitExtracted.declaration_date],
+              ['Valid Until', permitExtracted.valid_until],
+              ['Exporter', permitExtracted.exporter_name],
+              ['Consignee', permitExtracted.consignee_name],
+              ['Vessel', permitExtracted.vessel],
+              ['BL Number', permitExtracted.bl_number],
+              ['Container', permitExtracted.container_no],
+            ].filter(([, v]) => v).map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-3 text-xs">
+                <span className="text-slate-400 font-semibold shrink-0">{k}</span>
+                <span className="text-slate-700 font-bold text-right">{String(v)}</span>
+              </div>
+            ))}
+            {permitExtracted.items?.length > 0 && (
+              <div className="pt-2 border-t border-emerald-100">
+                <div className="text-[10px] font-black text-emerald-600 uppercase mb-1">{permitExtracted.items.length} items extracted</div>
+                {permitExtracted.items.slice(0, 3).map((item, i) => (
+                  <div key={i} className="text-[11px] text-slate-600 truncate">· {item.description} — {item.quantity} {item.unit}</div>
+                ))}
+                {permitExtracted.items.length > 3 && <div className="text-[10px] text-slate-400">+ {permitExtracted.items.length - 3} more</div>}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button onClick={() => setPermitExtracted(null)} className="h-10 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm cursor-pointer active:bg-slate-200">
+                Discard
+              </button>
+              <button
+                onClick={applyPermitData}
+                disabled={applyingPermit}
+                className="h-10 rounded-xl bg-emerald-600 text-white font-bold text-sm cursor-pointer active:bg-emerald-700 disabled:opacity-60 flex items-center justify-center gap-1.5"
+              >
+                {applyingPermit ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : null}
+                Apply to Shipment
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Upload button + progress */}
+        {permitExtracting ? (
+          <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="w-4 h-4 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin shrink-0" />
+            <span className="text-slate-500 text-xs font-semibold">{permitProgress || 'Processing…'}</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => permitInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-emerald-300 text-emerald-700 text-sm font-bold cursor-pointer hover:bg-emerald-50 active:bg-emerald-100 w-full justify-center"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            {shipment.permit_number ? 'Replace Permit PDF' : 'Upload Permit PDF'}
+          </button>
+        )}
+      </Section>
 
       {/* Warehouse processing status — no internal tool names exposed */}
       <Section title="Processing Status">

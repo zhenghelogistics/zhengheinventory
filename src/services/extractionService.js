@@ -86,6 +86,44 @@ export async function extractPurchaseOrder(file, onProgress) {
 }
 
 /**
+ * Extract structured data from a customs export permit PDF.
+ * Returns permit number, dates, items, exporter, consignee, port info.
+ */
+export async function extractPermit(file, onProgress) {
+  onProgress?.('Reading permit document…');
+  const base64 = await fileToBase64(file);
+
+  onProgress?.('Analysing permit with AI…');
+  const res = await fetch('/api/extract-permit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64, mediaType: file.type || 'application/pdf' }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error || `Extraction failed (${res.status})`);
+  }
+
+  const { text } = await res.json();
+  if (!text) throw new Error('No response from AI');
+
+  let clean = text;
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) {
+    clean = fence[1].trim();
+  } else {
+    clean = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    const start = clean.indexOf('{');
+    if (start > 0) clean = clean.slice(start);
+  }
+
+  const data = JSON.parse(jsonrepair(clean));
+  onProgress?.('Done');
+  return data;
+}
+
+/**
  * Match extracted items against existing stock lines.
  * Returns a drafts object { [lineId]: quantityString }
  */

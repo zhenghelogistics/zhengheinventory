@@ -1054,72 +1054,190 @@ export async function exportPSSLoadingReport({ movement, pssShipment, lines, con
 export async function exportPSSBulkLoadingReport(reports) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210;
+  const pageH = doc.internal.pageSize.getHeight();
   const today = new Date().toLocaleDateString('en-SG');
   const now = new Date().toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-  doc.setFillColor(6, 78, 59);
-  doc.rect(0, 0, W, 22, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
   const logo = await loadLogoBase64('/zhl-logo-white.png');
-  if (logo) doc.addImage(logo, 'PNG', 8, 3, 44, 15);
-  else { doc.setFontSize(11); doc.text(BRAND, 10, 14); }
-  doc.setFontSize(10);
-  doc.text('BULK INCOMING REPORT', W - 10, 14, { align: 'right' });
+  const fmtTs = (ts) => ts ? new Date(ts).toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pending';
 
-  doc.setTextColor(60, 60, 60);
-  let y = 30;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text(`Report generated: ${now}   ·   Total shipments: ${reports.length}`, 10, y);
-  y += 8;
+  function addPageHeader(isFirst) {
+    doc.setFillColor(6, 78, 59);
+    doc.rect(0, 0, W, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    if (logo) doc.addImage(logo, 'PNG', 8, 3, 44, 15);
+    else { doc.setFontSize(11); doc.text(BRAND, 10, 14); }
+    doc.setFontSize(10);
+    doc.text('BULK INCOMING REPORT', W - 10, 14, { align: 'right' });
+    if (isFirst) {
+      doc.setTextColor(60, 60, 60);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`Generated: ${now}   ·   ${reports.length} shipment${reports.length !== 1 ? 's' : ''}`, 10, 29);
+    }
+    return isFirst ? 34 : 27;
+  }
 
-  autoTable(doc, {
-    startY: y,
-    head: [['PO / Ref', 'Client', 'Vessel · Voyage', 'Container', 'Items', 'Total Qty', 'Gross Wt (KG)', 'Status']],
-    body: reports.map(({ movement, pssShipment, lines }) => {
-      const totalQty = (lines || []).reduce((s, l) => s + (parseFloat(l.qty_actual ?? l.qty_ordered) || 0), 0);
-      const gw = pssShipment?.gross_weight_kg;
-      return [
-        pssShipment?.po_number || movement?.movement_no || '—',
-        pssShipment?.client_name || movement?.company_name || '—',
-        [pssShipment?.vessel, pssShipment?.voyage].filter(Boolean).join(' · ') || '—',
-        [pssShipment?.container_type, pssShipment?.container_no].filter(Boolean).join(' ') || '—',
-        (lines || []).length,
-        totalQty.toLocaleString(),
-        gw ? Number(gw).toLocaleString() : '—',
-        movement?.status || '—',
-      ];
-    }),
-    styles: { fontSize: 7, cellPadding: 2 },
-    headStyles: { fillColor: [6, 78, 59], textColor: 255, fontStyle: 'bold', fontSize: 7 },
-    columnStyles: { 5: { halign: 'right' }, 6: { halign: 'right' } },
-    margin: { left: 10, right: 10 },
-  });
+  function addPageFooter() {
+    doc.setDrawColor(200, 200, 200);
+    doc.line(10, pageH - 12, W - 10, pageH - 12);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(180, 180, 180);
+    doc.text(`${BRAND} · Bulk Loading Report · Generated ${today}`, W / 2, pageH - 7, { align: 'center' });
+  }
 
-  y = doc.lastAutoTable.finalY + 8;
+  let y = addPageHeader(true);
+  let isFirstShipment = true;
 
+  for (const { movement, pssShipment, lines, conf } of reports) {
+    const poNo = pssShipment?.po_number || movement?.movement_no || '—';
+    const totalQty = (lines || []).reduce((s, l) => s + (parseFloat(l.qty_actual ?? l.qty_ordered) || 0), 0);
+    const totalWt = (lines || []).reduce((s, l) => s + (parseFloat(l.weight_kg) || 0), 0) || parseFloat(pssShipment?.gross_weight_kg) || 0;
+
+    // Estimate space needed for this shipment header block (~35mm) + at least first row of table
+    if (!isFirstShipment && y > pageH - 70) {
+      addPageFooter();
+      doc.addPage();
+      y = addPageHeader(false);
+    }
+
+    if (!isFirstShipment) {
+      doc.setDrawColor(6, 78, 59);
+      doc.setLineWidth(0.4);
+      doc.line(10, y, W - 10, y);
+      doc.setLineWidth(0.2);
+      y += 6;
+    }
+    isFirstShipment = false;
+
+    // ── Shipment header ───────────────────────────────────────────
+    doc.setFillColor(240, 253, 244);
+    doc.roundedRect(10, y - 2, W - 20, 28, 2, 2, 'F');
+
+    const left = [
+      ['PO / Reference', poNo],
+      ['Client', pssShipment?.client_name || movement?.company_name || '—'],
+      ['Consignee', pssShipment?.consignee_name || '—'],
+      ['Export Type', pssShipment?.export_type || '—'],
+      ['ETD', pssShipment?.etd || movement?.date_in || '—'],
+    ];
+    const right = [
+      ['Vessel / Voyage', [pssShipment?.vessel, pssShipment?.voyage].filter(Boolean).join(' / ') || '—'],
+      ['BL Number', pssShipment?.bl_number || '—'],
+      ['Container', [pssShipment?.container_type, pssShipment?.container_no].filter(Boolean).join(' ') || '—'],
+      ['POL', pssShipment?.pol || '—'],
+      ['POD', pssShipment?.pod || '—'],
+    ];
+
+    doc.setFontSize(7);
+    let lY = y + 2;
+    let rY = y + 2;
+    left.forEach(([label, val]) => {
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(6, 78, 59); doc.text(`${label}:`, 14, lY);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.text(String(val), 52, lY);
+      lY += 5;
+    });
+    right.forEach(([label, val]) => {
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(6, 78, 59); doc.text(`${label}:`, 112, rY);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.text(String(val), 148, rY);
+      rY += 5;
+    });
+
+    y = Math.max(lY, rY) + 3;
+
+    // ── Cargo table ───────────────────────────────────────────────
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(6, 78, 59);
+    doc.text('CARGO RECEIVED', 10, y);
+    y += 2;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['#', 'Description', 'HS Code', 'Expected Qty', 'Received Qty', 'Unit', 'Weight (KG)']],
+      body: (lines || []).map((l, i) => [
+        i + 1,
+        l.description || '—',
+        l.sku || l.hs_code || '—',
+        l.qty_ordered ?? '—',
+        l.qty_actual ?? l.qty_ordered ?? '—',
+        l.unit || 'PCS',
+        l.weight_kg != null ? Number(l.weight_kg).toLocaleString() : '—',
+      ]),
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [6, 78, 59], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 9 },
+        2: { cellWidth: 25, font: 'courier' },
+        3: { cellWidth: 26, halign: 'right' },
+        4: { cellWidth: 26, halign: 'right' },
+        5: { cellWidth: 16 },
+        6: { cellWidth: 24, halign: 'right' },
+      },
+      margin: { left: 10, right: 10 },
+      didDrawPage: () => {
+        addPageFooter();
+        addPageHeader(false);
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 4;
+
+    // ── Weight + confirmation strip ───────────────────────────────
+    doc.setFillColor(240, 253, 244);
+    doc.roundedRect(10, y, W - 20, 10, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(6, 78, 59);
+    doc.text('Gross Weight:', 14, y + 6.5);
+    doc.text(totalWt > 0 ? `${totalWt.toLocaleString()} KG` : '—', 48, y + 6.5);
+    doc.text(`Total Qty: ${totalQty.toLocaleString()}`, W / 2, y + 6.5, { align: 'center' });
+
+    const f1 = conf?.factor1_confirmed_at;
+    const f2 = conf?.factor2_confirmed_at;
+    const f3 = conf?.factor3_confirmed_at;
+    const confStr = [
+      f1 ? `F1: ${conf.factor1_user_name || ''}` : 'F1: Pending',
+      f2 ? `F2: ${conf.factor2_user_name || ''}` : 'F2: Pending',
+      f3 ? `F3: ${conf.inbound_signature_name || conf.factor3_scanned_by_name || ''}` : 'F3: Pending',
+    ].join('   ·   ');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(80, 80, 80);
+    doc.text(confStr, W - 14, y + 6.5, { align: 'right' });
+
+    y += 16;
+  }
+
+  // ── Combined totals ──────────────────────────────────────────────
   const totalGross = reports.reduce((s, r) => s + (parseFloat(r.pssShipment?.gross_weight_kg) || 0), 0);
   const totalItems = reports.reduce((s, r) => s + (r.lines || []).length, 0);
   const totalQtyAll = reports.reduce((s, r) => s + (r.lines || []).reduce((ss, l) => ss + (parseFloat(l.qty_actual ?? l.qty_ordered) || 0), 0), 0);
 
-  doc.setFillColor(240, 253, 244);
-  doc.roundedRect(10, y, W - 20, 24, 2, 2, 'F');
+  if (y > pageH - 40) {
+    addPageFooter();
+    doc.addPage();
+    y = addPageHeader(false);
+  }
+
+  doc.setDrawColor(6, 78, 59);
+  doc.setLineWidth(0.6);
+  doc.line(10, y, W - 10, y);
+  doc.setLineWidth(0.2);
+  y += 5;
+
+  doc.setFillColor(6, 78, 59);
+  doc.roundedRect(10, y, W - 20, 20, 2, 2, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(6, 78, 59);
-  doc.text(`Shipments: ${reports.length}`, 15, y + 7);
-  doc.text(`Line Items: ${totalItems}`, 15, y + 14);
-  doc.text(`Combined Gross Weight: ${totalGross > 0 ? totalGross.toLocaleString() + ' KG' : 'N/A'}`, 15, y + 21);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`COMBINED TOTALS — ${reports.length} Shipments`, 15, y + 7);
+  doc.text(`${totalItems} line items`, 15, y + 14);
+  doc.text(`Total Gross Weight: ${totalGross > 0 ? totalGross.toLocaleString() + ' KG' : 'N/A'}`, W / 2, y + 7, { align: 'center' });
   doc.text(`Total Qty Received: ${totalQtyAll.toLocaleString()}`, W - 15, y + 7, { align: 'right' });
+  doc.text(`Report: ${now}`, W - 15, y + 14, { align: 'right' });
 
-  const pageH = doc.internal.pageSize.getHeight();
-  doc.setDrawColor(200, 200, 200);
-  doc.line(10, pageH - 12, W - 10, pageH - 12);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(180, 180, 180);
-  doc.text(`${BRAND} · Bulk Loading Report · Generated ${today}`, W / 2, pageH - 7, { align: 'center' });
-
+  addPageFooter();
   doc.save(`BulkLoadingReport-${today.replace(/\//g, '-')}.pdf`);
 }

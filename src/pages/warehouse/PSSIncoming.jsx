@@ -554,7 +554,21 @@ export default function PSSIncoming() {
             {/* Step 1: Verify items */}
             <StepCard number={1} title="Verify Shipment" state={received ? 'done' : 'active'}>
               {lines.length === 0 ? (
-                <div className="text-center py-4 text-slate-400 text-sm">No product lines on this shipment.</div>
+                <div className="space-y-3">
+                  <div className="text-center py-4 text-slate-400 text-sm">No product lines attached — confirm receipt manually.</div>
+                  {!received && (
+                    <button
+                      onClick={confirmReceipt}
+                      disabled={saving}
+                      className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
+                    >
+                      {saving
+                        ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
+                        : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Mark as Received</>
+                      }
+                    </button>
+                  )}
+                </div>
               ) : (
                 <>
                   {(() => {
@@ -613,17 +627,24 @@ export default function PSSIncoming() {
                         </div>
 
                         {!received && (
-                          <button
-                            onClick={confirmReceipt}
-                            disabled={saving || totalKg === 0}
-                            className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-40 flex items-center justify-center gap-2"
-                          >
-                            {saving ? (
-                              <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
-                            ) : (
-                              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All Items Present — Confirm</>
+                          <>
+                            {totalKg === 0 && (
+                              <p className="text-[10px] text-amber-500 font-semibold text-center -mt-1">
+                                Enter item weights above to record gross weight (recommended)
+                              </p>
                             )}
-                          </button>
+                            <button
+                              onClick={confirmReceipt}
+                              disabled={saving}
+                              className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
+                            >
+                              {saving ? (
+                                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
+                              ) : (
+                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All Items Present — Confirm</>
+                              )}
+                            </button>
+                          </>
                         )}
                       </>
                     );
