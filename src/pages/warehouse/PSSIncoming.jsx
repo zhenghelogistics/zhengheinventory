@@ -226,6 +226,10 @@ export default function PSSIncoming() {
   const [podGenerating, setPodGenerating] = useState(false);
   const [weights, setWeights] = useState({});
   const [packagingWeight, setPackagingWeight] = useState('');
+  const [itemStates, setItemStates] = useState({});   // { [lineId]: 'pending'|'confirmed'|'flagged' }
+  const [itemActuals, setItemActuals] = useState({});  // { [lineId]: string } actual qty for flagged
+  const [itemNotes, setItemNotes] = useState({});      // { [lineId]: string } discrepancy note
+  const [openFlagMenu, setOpenFlagMenu] = useState(null); // lineId or null
   const [reportGenerating, setReportGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [discrepancyMode, setDiscrepancyMode] = useState(false);
@@ -283,6 +287,11 @@ export default function PSSIncoming() {
     setSelected(mv);
     setMeta(mv._pss || {});
     setReceived(mv.status === 'In Progress');
+    setOpenFlagMenu(null);
+    setItemStates({});
+    setItemActuals({});
+    setItemNotes({});
+    setPackagingWeight('');
 
     setDetailLoading(true);
     setConf(null);
@@ -298,34 +307,55 @@ export default function PSSIncoming() {
     setConf(confRes.data || null);
     const init = {};
     const wInit = {};
+    const statesInit = {};
     linesData.forEach((l) => {
       init[l.id] = String(l.qty_actual ?? '');
       wInit[l.id] = l.weight_kg != null ? String(l.weight_kg) : '';
+      // If already received, derive status from stored qty
+      if (mv.status === 'In Progress' && l.qty_actual != null) {
+        statesInit[l.id] = l.qty_actual < l.qty_ordered ? 'flagged' : 'confirmed';
+      }
     });
     setDrafts(init);
     setWeights(wInit);
+    if (Object.keys(statesInit).length > 0) setItemStates(statesInit);
     setDetailLoading(false);
   }
 
   async function confirmReceipt() {
     setSaving(true);
     const today = new Date().toISOString().slice(0, 10);
+    const flaggedItems = [];
+
     for (const line of lines) {
+      const state = itemStates[line.id] || 'confirmed';
+      const actualQty = state === 'flagged'
+        ? (parseFloat(itemActuals[line.id]) ?? line.qty_ordered)
+        : line.qty_ordered;
       const w = parseFloat(weights[line.id]);
-      // Save qty_actual first — this is the critical update
+
       await supabase.from('stock_lines')
-        .update({ qty_actual: line.qty_ordered, date_in: today })
+        .update({ qty_actual: actualQty, date_in: today })
         .eq('id', line.id);
-      // Save weight separately — fails gracefully if column not yet added
       if (w > 0) {
         await supabase.from('stock_lines')
           .update({ weight_kg: w })
           .eq('id', line.id);
       }
       await log('pss_receive', line.id, selected.movement_no, {
-        sku: line.sku, description: line.description, qty_confirmed: line.qty_ordered,
+        sku: line.sku, description: line.description, qty_confirmed: actualQty,
       });
+
+      if (state === 'flagged') {
+        flaggedItems.push({
+          description: line.description || line.sku || 'Item',
+          expected: line.qty_ordered,
+          received: actualQty,
+          note: itemNotes[line.id] || '',
+        });
+      }
     }
+
     await supabase.from('movements').update({ status: 'In Progress' }).eq('id', selected.id);
 
     const itemsKg = Object.values(weights).reduce((s, w) => s + (parseFloat(w) || 0), 0);
@@ -338,8 +368,21 @@ export default function PSSIncoming() {
       setMeta((p) => ({ ...p, gross_weight_kg: totalKg }));
     }
 
+    if (flaggedItems.length > 0 && meta?.id) {
+      const notes = flaggedItems
+        .map((f) => `• ${f.description}: expected ${f.expected}, received ${f.received}${f.note ? ` — ${f.note}` : ''}`)
+        .join('\n');
+      await supabase.from('pss_shipments')
+        .update({ discrepancy_status: 'flagged', discrepancy_notes: notes })
+        .eq('id', meta.id);
+      setMeta((p) => ({ ...p, discrepancy_status: 'flagged', discrepancy_notes: notes }));
+    }
+
     setLines((prev) => prev.map((l) => ({
       ...l,
+      qty_actual: itemStates[l.id] === 'flagged'
+        ? (parseFloat(itemActuals[l.id]) ?? l.qty_ordered)
+        : l.qty_ordered,
       weight_kg: parseFloat(weights[l.id]) || l.weight_kg || null,
     })));
     setSelected((p) => ({ ...p, status: 'In Progress' }));
@@ -586,38 +629,146 @@ export default function PSSIncoming() {
                     const itemsKg = Object.values(weights).reduce((s, w) => s + (parseFloat(w) || 0), 0);
                     const extrasKg = parseFloat(packagingWeight) || 0;
                     const totalKg = itemsKg + extrasKg;
+                    const allChecked = lines.length > 0 && lines.every((l) => {
+                      const st = itemStates[l.id];
+                      return st === 'confirmed' || st === 'flagged';
+                    });
+                    const pendingCount = lines.filter((l) => !itemStates[l.id] || itemStates[l.id] === 'pending').length;
+                    const flaggedCount = lines.filter((l) => itemStates[l.id] === 'flagged').length;
+
                     return (
                       <>
                         <div className="space-y-2 mb-3">
                           {lines.map((line) => {
+                            const st = received
+                              ? (itemStates[line.id] || (line.qty_actual != null && line.qty_actual < line.qty_ordered ? 'flagged' : 'confirmed'))
+                              : (itemStates[line.id] || 'pending');
+                            const isConfirmed = st === 'confirmed';
+                            const isFlagged = st === 'flagged';
+                            const isFlagOpen = openFlagMenu === line.id;
                             const w = line.weight_kg ?? (received ? null : parseFloat(weights[line.id]) || null);
+
                             return (
-                              <div key={line.id} className={`rounded-xl border overflow-hidden ${received ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-200'}`}>
-                                <div className="flex items-center justify-between gap-3 p-3">
-                                  <div className="min-w-0">
+                              <div key={line.id} className={`rounded-xl border overflow-hidden transition-colors ${
+                                isConfirmed ? 'bg-emerald-50 border-emerald-200'
+                                : isFlagged ? 'bg-red-50 border-red-200'
+                                : 'bg-white border-slate-200'
+                              }`}>
+                                {/* Item header row */}
+                                <div className="flex items-start gap-3 p-3">
+                                  <div className="flex-1 min-w-0">
                                     <div className="font-bold text-slate-800 text-sm leading-snug whitespace-pre-line">{line.description || '—'}</div>
                                     {line.sku && <div className="text-[10px] font-mono text-slate-400 mt-0.5">HS: {line.sku}</div>}
+                                    {isFlagged && (itemNotes[line.id] || (received && line.qty_actual != null && line.qty_actual !== line.qty_ordered)) && (
+                                      <div className="text-[10px] text-red-600 font-semibold mt-1">
+                                        {received
+                                          ? `Received ${line.qty_actual} of ${line.qty_ordered}`
+                                          : `Received ${itemActuals[line.id] || '?'} of ${line.qty_ordered}`}
+                                        {itemNotes[line.id] && ` — ${itemNotes[line.id]}`}
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="shrink-0 text-right">
-                                    <div className="text-2xl font-black tabular-nums text-slate-800">{line.qty_ordered ?? '—'}</div>
-                                    <div className="text-[10px] text-slate-400 font-semibold">{line.unit || 'PCS'}</div>
+                                  <div className="shrink-0 flex flex-col items-end gap-1.5">
+                                    <div className="flex items-center gap-1">
+                                      <div className="text-right">
+                                        <div className="text-2xl font-black tabular-nums text-slate-800 leading-none">{line.qty_ordered ?? '—'}</div>
+                                        <div className="text-[10px] text-slate-400 font-semibold">{line.unit || 'PCS'}</div>
+                                      </div>
+                                      {/* Status badge (received view) */}
+                                      {received && (
+                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center ml-1 ${isConfirmed ? 'bg-emerald-500' : 'bg-red-400'}`}>
+                                          {isConfirmed
+                                            ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                            : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                          }
+                                        </div>
+                                      )}
+                                    </div>
                                     {received && w != null && (
-                                      <div className="text-[10px] text-emerald-600 font-black mt-0.5 tabular-nums">{Number(w).toLocaleString()} KG</div>
+                                      <div className="text-[10px] text-emerald-600 font-black tabular-nums">{Number(w).toLocaleString()} KG</div>
                                     )}
                                   </div>
                                 </div>
+
+                                {/* Weight + tick/flag row (pre-confirm) */}
                                 {!received && (
-                                  <div className="flex items-center gap-2 px-3 pb-3 border-t border-amber-100 pt-2 bg-amber-50/40">
-                                    <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide shrink-0">Weight</span>
+                                  <div className={`px-3 pb-3 pt-2 border-t flex items-center gap-2 ${
+                                    isFlagged ? 'border-red-100 bg-red-50/60' : 'border-slate-100 bg-slate-50/40'
+                                  }`}>
+                                    {/* Weight input */}
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide shrink-0">KG</span>
                                     <input
                                       type="number"
                                       inputMode="decimal"
-                                      className="flex-1 px-3 py-1.5 rounded-lg border-2 border-amber-200 text-slate-800 text-sm font-black focus:outline-none focus:border-amber-400 text-right tabular-nums bg-white"
+                                      className="flex-1 px-2.5 py-1.5 rounded-lg border-2 border-slate-200 text-slate-800 text-sm font-black focus:outline-none focus:border-amber-400 text-right tabular-nums bg-white"
                                       value={weights[line.id] || ''}
                                       onChange={(e) => setWeights((prev) => ({ ...prev, [line.id]: e.target.value }))}
                                       placeholder="0"
                                     />
-                                    <span className="text-xs font-bold text-amber-600 shrink-0">KG</span>
+                                    {/* Tick button */}
+                                    <button
+                                      onClick={() => {
+                                        setItemStates((p) => ({ ...p, [line.id]: 'confirmed' }));
+                                        setOpenFlagMenu(null);
+                                      }}
+                                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border-2 cursor-pointer transition-colors ${
+                                        isConfirmed
+                                          ? 'bg-emerald-500 border-emerald-500 text-white'
+                                          : 'bg-white border-slate-200 text-slate-300 active:border-emerald-400'
+                                      }`}
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </button>
+                                    {/* Flag button */}
+                                    <button
+                                      onClick={() => setOpenFlagMenu(isFlagOpen ? null : line.id)}
+                                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border-2 cursor-pointer transition-colors ${
+                                        isFlagged
+                                          ? 'bg-red-500 border-red-500 text-white'
+                                          : 'bg-white border-slate-200 text-slate-300 active:border-red-400'
+                                      }`}
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Inline flag menu */}
+                                {isFlagOpen && !received && (
+                                  <div className="px-3 pb-3 border-t border-red-100 bg-red-50 space-y-2 pt-2.5">
+                                    <div className="text-[10px] font-black text-red-600 uppercase tracking-wide">Discrepancy Details</div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-slate-500 shrink-0">Actual qty received</span>
+                                      <input
+                                        type="number"
+                                        inputMode="numeric"
+                                        className="flex-1 px-3 py-1.5 rounded-lg border-2 border-red-200 text-slate-800 text-sm font-black focus:outline-none focus:border-red-400 text-right tabular-nums bg-white"
+                                        placeholder={String(line.qty_ordered)}
+                                        value={itemActuals[line.id] || ''}
+                                        onChange={(e) => setItemActuals((p) => ({ ...p, [line.id]: e.target.value }))}
+                                      />
+                                      <span className="text-xs font-bold text-slate-500 shrink-0">{line.unit || 'PCS'}</span>
+                                    </div>
+                                    <textarea
+                                      rows={2}
+                                      className="w-full px-3 py-2 rounded-lg border-2 border-red-200 text-slate-700 text-xs focus:outline-none focus:border-red-400 bg-white resize-none"
+                                      placeholder="Explanation (e.g. short-shipped, damaged box…)"
+                                      value={itemNotes[line.id] || ''}
+                                      onChange={(e) => setItemNotes((p) => ({ ...p, [line.id]: e.target.value }))}
+                                    />
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => setOpenFlagMenu(null)}
+                                        className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold cursor-pointer active:bg-slate-200"
+                                      >Cancel</button>
+                                      <button
+                                        onClick={() => {
+                                          setItemStates((p) => ({ ...p, [line.id]: 'flagged' }));
+                                          setOpenFlagMenu(null);
+                                        }}
+                                        className="flex-1 py-2 rounded-xl bg-red-500 text-white text-xs font-bold cursor-pointer active:bg-red-600"
+                                      >Flag &amp; Notify PSS on Submit</button>
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -627,15 +778,12 @@ export default function PSSIncoming() {
 
                         {/* Packaging extras + running total */}
                         <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden mb-3">
-                          {/* Items subtotal */}
                           {itemsKg > 0 && (
                             <div className="flex items-center justify-between px-4 py-2 border-b border-amber-100">
                               <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">Items Subtotal</span>
                               <span className="font-black text-sm tabular-nums text-amber-700">{itemsKg.toLocaleString()} KG</span>
                             </div>
                           )}
-
-                          {/* Extras field */}
                           {!received && (
                             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-100">
                               <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide shrink-0">Pallet / Box / Packing</span>
@@ -650,14 +798,6 @@ export default function PSSIncoming() {
                               <span className="text-xs font-bold text-amber-600 shrink-0">KG</span>
                             </div>
                           )}
-                          {received && extrasKg > 0 && (
-                            <div className="flex items-center justify-between px-4 py-2 border-b border-amber-100">
-                              <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">Pallet / Box / Packing</span>
-                              <span className="font-black text-sm tabular-nums text-amber-700">{extrasKg.toLocaleString()} KG</span>
-                            </div>
-                          )}
-
-                          {/* Total */}
                           <div className="flex items-center justify-between px-4 py-2.5">
                             <span className="text-xs font-black text-amber-700 uppercase tracking-wide">Total Gross Weight</span>
                             <span className={`font-black text-xl tabular-nums ${totalKg > 0 || meta?.gross_weight_kg ? 'text-amber-800' : 'text-slate-300'}`}>
@@ -668,25 +808,33 @@ export default function PSSIncoming() {
                           </div>
                         </div>
 
+                        {/* Confirm button */}
                         {!received && (
-                          <>
-                            {totalKg === 0 && (
-                              <p className="text-[10px] text-amber-500 font-semibold text-center -mt-1">
-                                Enter item weights above to record gross weight (recommended)
+                          <div className="space-y-2">
+                            {!allChecked && (
+                              <p className="text-[11px] text-slate-400 font-semibold text-center">
+                                {pendingCount} item{pendingCount !== 1 ? 's' : ''} left to verify — tick ✓ or flag each item above
+                              </p>
+                            )}
+                            {flaggedCount > 0 && allChecked && (
+                              <p className="text-[11px] text-red-500 font-semibold text-center">
+                                {flaggedCount} discrepanc{flaggedCount !== 1 ? 'ies' : 'y'} will be sent to PSS on confirm
                               </p>
                             )}
                             <button
                               onClick={confirmReceipt}
-                              disabled={saving}
-                              className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
+                              disabled={saving || !allChecked}
+                              className="w-full h-12 rounded-xl bg-teal-600 text-white font-bold text-sm cursor-pointer active:bg-teal-700 disabled:opacity-40 flex items-center justify-center gap-2"
                             >
                               {saving ? (
                                 <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Confirming…</>
                               ) : (
-                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> All Items Present — Confirm</>
+                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                  {flaggedCount > 0 ? `Confirm Receipt + Flag ${flaggedCount} Discrepanc${flaggedCount !== 1 ? 'ies' : 'y'}` : 'Confirm Receipt — All Clear'}
+                                </>
                               )}
                             </button>
-                          </>
+                          </div>
                         )}
                       </>
                     );
