@@ -225,6 +225,7 @@ export default function PSSIncoming() {
   const [podFlow, setPodFlow] = useState(null);
   const [podGenerating, setPodGenerating] = useState(false);
   const [weights, setWeights] = useState({});
+  const [packagingWeight, setPackagingWeight] = useState('');
   const [reportGenerating, setReportGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [discrepancyMode, setDiscrepancyMode] = useState(false);
@@ -327,7 +328,9 @@ export default function PSSIncoming() {
     }
     await supabase.from('movements').update({ status: 'In Progress' }).eq('id', selected.id);
 
-    const totalKg = Object.values(weights).reduce((s, w) => s + (parseFloat(w) || 0), 0);
+    const itemsKg = Object.values(weights).reduce((s, w) => s + (parseFloat(w) || 0), 0);
+    const extrasKg = parseFloat(packagingWeight) || 0;
+    const totalKg = itemsKg + extrasKg;
     if (totalKg > 0 && meta?.id) {
       await supabase.from('pss_shipments')
         .update({ gross_weight_kg: totalKg })
@@ -580,7 +583,9 @@ export default function PSSIncoming() {
               ) : (
                 <>
                   {(() => {
-                    const totalKg = Object.values(weights).reduce((s, w) => s + (parseFloat(w) || 0), 0);
+                    const itemsKg = Object.values(weights).reduce((s, w) => s + (parseFloat(w) || 0), 0);
+                    const extrasKg = parseFloat(packagingWeight) || 0;
+                    const totalKg = itemsKg + extrasKg;
                     return (
                       <>
                         <div className="space-y-2 mb-3">
@@ -620,18 +625,47 @@ export default function PSSIncoming() {
                           })}
                         </div>
 
-                        {/* Running total */}
-                        <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border mb-3 ${
-                          totalKg > 0 || (received && meta?.gross_weight_kg)
-                            ? 'bg-amber-50 border-amber-200'
-                            : 'bg-slate-50 border-slate-200'
-                        }`}>
-                          <span className="text-xs font-black text-amber-700 uppercase tracking-wide">Total Gross Weight</span>
-                          <span className={`font-black text-xl tabular-nums ${totalKg > 0 || meta?.gross_weight_kg ? 'text-amber-800' : 'text-slate-300'}`}>
-                            {((received ? meta?.gross_weight_kg : totalKg) || 0) > 0
-                              ? `${Number(received ? meta?.gross_weight_kg : totalKg).toLocaleString()} KG`
-                              : '— KG'}
-                          </span>
+                        {/* Packaging extras + running total */}
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden mb-3">
+                          {/* Items subtotal */}
+                          {itemsKg > 0 && (
+                            <div className="flex items-center justify-between px-4 py-2 border-b border-amber-100">
+                              <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">Items Subtotal</span>
+                              <span className="font-black text-sm tabular-nums text-amber-700">{itemsKg.toLocaleString()} KG</span>
+                            </div>
+                          )}
+
+                          {/* Extras field */}
+                          {!received && (
+                            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-100">
+                              <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide shrink-0">Pallet / Box / Packing</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                className="flex-1 px-3 py-1.5 rounded-lg border-2 border-amber-200 text-slate-800 text-sm font-black focus:outline-none focus:border-amber-400 text-right tabular-nums bg-white"
+                                value={packagingWeight}
+                                onChange={(e) => setPackagingWeight(e.target.value)}
+                                placeholder="0"
+                              />
+                              <span className="text-xs font-bold text-amber-600 shrink-0">KG</span>
+                            </div>
+                          )}
+                          {received && extrasKg > 0 && (
+                            <div className="flex items-center justify-between px-4 py-2 border-b border-amber-100">
+                              <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">Pallet / Box / Packing</span>
+                              <span className="font-black text-sm tabular-nums text-amber-700">{extrasKg.toLocaleString()} KG</span>
+                            </div>
+                          )}
+
+                          {/* Total */}
+                          <div className="flex items-center justify-between px-4 py-2.5">
+                            <span className="text-xs font-black text-amber-700 uppercase tracking-wide">Total Gross Weight</span>
+                            <span className={`font-black text-xl tabular-nums ${totalKg > 0 || meta?.gross_weight_kg ? 'text-amber-800' : 'text-slate-300'}`}>
+                              {((received ? meta?.gross_weight_kg : totalKg) || 0) > 0
+                                ? `${Number(received ? meta?.gross_weight_kg : totalKg).toLocaleString()} KG`
+                                : '— KG'}
+                            </span>
+                          </div>
                         </div>
 
                         {!received && (
