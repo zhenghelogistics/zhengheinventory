@@ -330,7 +330,7 @@ export default function PSSIncoming() {
     for (const line of lines) {
       const state = itemStates[line.id] || 'confirmed';
       const actualQty = state === 'flagged'
-        ? (parseFloat(itemActuals[line.id]) ?? line.qty_ordered)
+        ? (parseFloat(itemActuals[line.id]) || line.qty_ordered)
         : line.qty_ordered;
       const w = parseFloat(weights[line.id]);
 
