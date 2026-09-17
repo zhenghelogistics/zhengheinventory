@@ -61,6 +61,34 @@ export function ClientAuthProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
 
+    // ── DEV PREVIEW ─────────────────────────────────────────────
+    // Set VITE_PORTAL_DEV_CLIENT=<client code> in .env.local to skip login
+    // and open the portal as that client. import.meta.env.DEV is false in
+    // any production build, so this cannot ship — `npm run build` strips it.
+    if (import.meta.env.DEV && import.meta.env.VITE_PORTAL_DEV_CLIENT) {
+      const code = import.meta.env.VITE_PORTAL_DEV_CLIENT;
+      supabase
+        .from('clients')
+        .select('id, code, name, active')
+        .eq('code', code)
+        .maybeSingle()
+        .then(({ data, error: err }) => {
+          if (cancelled) return;
+          if (!data) {
+            setError(
+              err?.message ||
+                `Dev preview: no client with code "${code}". Run supabase/seed_test_client.sql first.`,
+            );
+          } else {
+            setClient(data);
+            setProfile({ role: 'admin', fullName: `${data.name} (dev preview)` });
+            setSession({ user: { email: 'dev-preview@localhost' } });
+          }
+          setLoading(false);
+        });
+      return () => { cancelled = true; };
+    }
+
     supabase.auth.getSession().then(async ({ data }) => {
       if (cancelled) return;
       setSession(data.session);
@@ -100,6 +128,11 @@ export function ClientAuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
+    if (import.meta.env.DEV && import.meta.env.VITE_PORTAL_DEV_CLIENT) {
+      // Nothing to sign out of — tell them how to leave preview mode.
+      setError('Dev preview mode. Remove VITE_PORTAL_DEV_CLIENT from .env.local to use real logins.');
+      return;
+    }
     await supabase.auth.signOut();
     setClient(null);
     setProfile(null);

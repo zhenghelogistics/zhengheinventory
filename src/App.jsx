@@ -6,6 +6,7 @@ import PortalDashboard from './pages/portal/PortalDashboard';
 import PortalInventory from './pages/portal/PortalInventory';
 import PortalOrders from './pages/portal/PortalOrders';
 import PortalOrderNew from './pages/portal/PortalOrderNew';
+import PortalOrderDetail from './pages/portal/PortalOrderDetail';
 import PortalSwitcher from './components/PortalSwitcher';
 import MovementListPage from './pages/MovementListPage';
 import MovementDetailPage from './pages/MovementDetailPage';
@@ -132,6 +133,7 @@ export default function App() {
           <Route path="inventory" element={<PortalInventory />} />
           <Route path="orders" element={<PortalOrders />} />
           <Route path="orders/new" element={<PortalOrderNew />} />
+          <Route path="orders/:id" element={<PortalOrderDetail />} />
         </Route>
         <Route path="/warehouse" element={<WarehouseLayout />}>
           <Route index element={<WarehouseHome />} />

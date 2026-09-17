@@ -35,6 +35,7 @@ export function useClientOrders() {
     const { data, error: err } = await supabase
       .from('client_orders')
       .select('*, client_order_lines(id, sku, description, unit, qty_ordered, qty_dispatched)')
+      .eq('client_id', client.id)
       .order('submitted_at', { ascending: false });
     if (err) setError(err.message);
     else { setOrders(data || []); setError(null); }
@@ -133,4 +134,53 @@ export function useDeliveryPreview() {
   useEffect(() => { load(); }, [load]);
 
   return { preview, refresh: load };
+}
+
+/**
+ * One order with its lines and status history, for the tracking screen.
+ */
+export function useClientOrder(orderId) {
+  const [order, setOrder] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchOrder = useCallback(async () => {
+    if (!orderId) return;
+    setLoading(true);
+    const [o, e] = await Promise.all([
+      supabase
+        .from('client_orders')
+        .select('*, client_order_lines(id, line_no, sku, description, unit, qty_ordered, qty_picked, qty_dispatched)')
+        .eq('id', orderId)
+        .maybeSingle(),
+      supabase
+        .from('client_order_events')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true }),
+    ]);
+    if (o.error) setError(o.error.message);
+    else if (!o.data) setError('Order not found.');
+    else { setOrder(o.data); setError(null); }
+    setEvents(e.data || []);
+    setLoading(false);
+  }, [orderId]);
+
+  useEffect(() => { fetchOrder(); }, [fetchOrder]);
+
+  useEffect(() => {
+    if (!orderId) return;
+    const channel = supabase
+      .channel(`client_order_rt_${orderId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'client_orders', filter: `id=eq.${orderId}` },
+        () => { fetchOrder(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [orderId, fetchOrder]);
+
+  return { order, events, loading, error, refetch: fetchOrder };
 }
