@@ -54,38 +54,27 @@ logins, edit the cut-off. After this, none of the above needs the SQL editor.
 
 ## Creating a client account
 
-1. **Supabase Dashboard → Authentication → Users → Add user.** Use the
-   customer's real email and tick "Auto Confirm User".
+**Hive → Clients → New client**, then **Logins → Add login**. Enter an email
+and a temporary password; the account is created and confirmed in one step, and
+they can sign in at `/portal` immediately. Share the password directly — they
+change it via "Forgot your password" on the login screen.
 
-2. **Create the client and link the user:**
-
-```sql
-INSERT INTO clients (code, name, legacy_company_name, contact_email)
-VALUES ('OKI', 'Oki Ara Pte Ltd', 'Oki Ara Pte Ltd', 'ops@okiara.com')
-RETURNING id;
-
-INSERT INTO client_users (user_id, client_id, full_name)
-VALUES ('<auth-user-uuid>', '<client-uuid>', 'Jane Tan');
-```
-
-3. Sign in at `/portal`.
+Revoking a login deactivates the `client_users` link rather than deleting the
+account, so their order history stays attributable and access can be restored.
 
 A user with no `client_users` row is signed straight back out — internal staff
 accounts can't wander into the portal by accident.
 
-### Seeding stock for testing
+### Where client stock comes from
 
-```sql
-SELECT staff_receive_stock(
-  p_client_id     => '<client-uuid>',
-  p_sku           => 'OKI-500',
-  p_qty           => 1000,
-  p_received_date => '2026-09-01',
-  p_description   => 'Oki Ara 500ml',
-  p_unit          => 'carton',
-  p_expiry_date   => '2027-12-15'   -- omit entirely for non-dated products
-);
-```
+**Brood → Receive Delivery.** Confirming quantities publishes each line to the
+client's portal balance, carrying the receiving date and the batch and expiry
+if entered. The movement has to resolve to a client — via `movements.client_id`,
+or a client whose `legacy_company_name` matches `movements.company_name`.
+
+If it doesn't resolve, receiving still succeeds and Brood says the stock isn't
+going to a portal. Plenty of movements are for non-portal customers, so this
+can't be allowed to block the warehouse.
 
 ---
 
@@ -172,13 +161,9 @@ then `lead_days` in business days, then roll forward off any non-working day.
 Both the portal's preview and order creation call the same function, so the
 date the client is shown before submitting is the date they get.
 
-Changing the cut-off:
-
-```sql
-UPDATE delivery_settings SET cutoff_time = '14:00' WHERE client_id IS NULL;
-```
-
-An admin UI for this is still to be built.
+Edit it in **Hive → Clients**: cut-off time, timezone, lead days and operating
+days. Per-client overrides are supported by `staff_set_delivery_settings()` but
+the screen currently only edits the global default.
 
 ---
 
@@ -192,10 +177,22 @@ New ─→ Confirmed ─→ Picking ─→ Packed ─→ Out for Delivery ─→
  └─ portal_cancel_order() — client-cancellable only at this point
 ```
 
-`staff_dispatch_order()` converts allocation to dispatch on each source batch.
+Ops accepts a request in **Hive → Fulfilment Requests**, which calls
+`staff_confirm_order()`. Everything after that is automatic: a trigger on
+`pick_lists` mirrors the warehouse's own workflow onto the client's order.
 
-Confirm and dispatch are wired in the schema but **not yet called from the Hive
-UI** — see below.
+| Brood pick list      | Client sees      |
+| -------------------- | ---------------- |
+| Pending              | Confirmed        |
+| Picking / Checking   | Picking          |
+| Photo Pending / Admin Review | Packed   |
+| Awaiting Signature   | Out for Delivery |
+| Completed            | Completed        |
+
+Status can only move forwards, so a pick list going back from Checking to
+Picking won't drag the client's timeline backwards. Dispatch — allocation
+becoming `qty_dispatched` on the source batches — happens once, when the order
+first reaches Out for Delivery or Completed.
 
 ---
 
