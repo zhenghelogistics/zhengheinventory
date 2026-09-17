@@ -39,25 +39,22 @@ const portals = [
     features: ['Receive Delivery', 'Pick & Plan', 'Shipment Cards', 'Find Item'],
   },
   {
-    id: 'pss',
-    name: 'PSS',
-    subtitle: 'Permit & Shipping',
-    description: 'Export permit declarations, shipping instructions, cargo clearance and documentation.',
-    to: '/pss',
-    color: '#064e3b',
-    accent: '#065f46',
+    id: 'portal',
+    name: 'Client Portal',
+    subtitle: 'Customer Self-Service',
+    description: 'Where warehouse clients check their own stock, raise delivery requests and track fulfilment.',
+    to: '/portal',
+    color: '#0f766e',
+    accent: '#0d9488',
     badge: null,
     disabled: false,
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-        <polyline points="10 9 9 9 8 9"/>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
       </svg>
     ),
-    features: ['Export Permits', 'Shipping Instructions', 'Cargo Clearance', 'Document Store'],
+    features: ['Stock Visibility', 'Delivery Requests', 'Order Tracking', 'Order History'],
   },
 ];
 

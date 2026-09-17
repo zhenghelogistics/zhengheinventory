@@ -1,10 +1,11 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from './hooks/useTheme';
 import PortalSelectPage from './pages/PortalSelectPage';
-import PSSLayout from './pages/pss/PSSLayout';
-import PSSHome from './pages/pss/PSSHome';
-import NewShipment from './pages/pss/NewShipment';
-import PSSShipmentDetail from './pages/pss/PSSShipmentDetail';
+import PortalLayout from './pages/portal/PortalLayout';
+import PortalDashboard from './pages/portal/PortalDashboard';
+import PortalInventory from './pages/portal/PortalInventory';
+import PortalOrders from './pages/portal/PortalOrders';
+import PortalOrderNew from './pages/portal/PortalOrderNew';
 import PortalSwitcher from './components/PortalSwitcher';
 import MovementListPage from './pages/MovementListPage';
 import MovementDetailPage from './pages/MovementDetailPage';
@@ -19,9 +20,9 @@ import ShipmentDetail from './pages/warehouse/ShipmentDetail';
 import ScanClientQR from './pages/warehouse/ScanClientQR';
 import PickListsPage from './pages/warehouse/PickListsPage';
 import PickExecution from './pages/warehouse/PickExecution';
-import PSSIncoming from './pages/warehouse/PSSIncoming';
 import ActivityLogPage from './pages/ActivityLogPage';
 import { WarehouseAuthProvider } from './context/WarehouseAuthContext';
+import { ClientAuthProvider } from './context/ClientAuthContext';
 
 const NAV = [
   {
@@ -117,10 +118,20 @@ export default function App() {
     <WarehouseAuthProvider>
       <Routes>
         <Route path="/" element={<PortalSelectPage />} />
-        <Route path="/pss" element={<PSSLayout />}>
-          <Route index element={<PSSHome />} />
-          <Route path="entry/:id" element={<PSSShipmentDetail />} />
-          <Route path="new" element={<NewShipment />} />
+        {/* Customer-facing Client Portal. Guarded by ClientAuthContext —
+            an unauthenticated visitor gets the login screen, never a layout. */}
+        <Route
+          path="/portal"
+          element={
+            <ClientAuthProvider>
+              <PortalLayout />
+            </ClientAuthProvider>
+          }
+        >
+          <Route index element={<PortalDashboard />} />
+          <Route path="inventory" element={<PortalInventory />} />
+          <Route path="orders" element={<PortalOrders />} />
+          <Route path="orders/new" element={<PortalOrderNew />} />
         </Route>
         <Route path="/warehouse" element={<WarehouseLayout />}>
           <Route index element={<WarehouseHome />} />
@@ -133,7 +144,6 @@ export default function App() {
           <Route path="scan-qr" element={<ScanClientQR />} />
           <Route path="pick-lists" element={<PickListsPage />} />
           <Route path="pick-lists/:id" element={<PickExecution />} />
-          <Route path="pss-incoming" element={<PSSIncoming />} />
         </Route>
         <Route path="/*" element={<MainApp />} />
       </Routes>
