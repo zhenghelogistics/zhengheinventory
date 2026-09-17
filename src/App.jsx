@@ -22,6 +22,8 @@ import ScanClientQR from './pages/warehouse/ScanClientQR';
 import PickListsPage from './pages/warehouse/PickListsPage';
 import PickExecution from './pages/warehouse/PickExecution';
 import ActivityLogPage from './pages/ActivityLogPage';
+import FulfilmentRequestsPage from './pages/FulfilmentRequestsPage';
+import ClientsAdminPage from './pages/ClientsAdminPage';
 import { WarehouseAuthProvider } from './context/WarehouseAuthContext';
 import { ClientAuthProvider } from './context/ClientAuthContext';
 
@@ -36,6 +38,30 @@ const NAV = [
         <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
         <circle cx="5.5" cy="18.5" r="2.5"/>
         <circle cx="18.5" cy="18.5" r="2.5"/>
+      </svg>
+    ),
+  },
+  {
+    to: '/fulfilment',
+    end: true,
+    label: 'Fulfilment Requests',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
+      </svg>
+    ),
+  },
+  {
+    to: '/clients',
+    end: true,
+    label: 'Clients',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
       </svg>
     ),
   },
@@ -107,6 +133,8 @@ function MainApp() {
         <Routes>
           <Route path="/movements" element={<MovementListPage />} />
           <Route path="/movements/:id" element={<MovementDetailPage />} />
+          <Route path="/fulfilment" element={<FulfilmentRequestsPage />} />
+          <Route path="/clients" element={<ClientsAdminPage />} />
           <Route path="/activity" element={<ActivityLogPage />} />
         </Routes>
       </main>

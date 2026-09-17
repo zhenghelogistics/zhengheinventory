@@ -78,6 +78,9 @@ export default function ReceiveDelivery() {
   const [conf, setConf] = useState(null);
   const [lines, setLines] = useState([]);
   const [drafts, setDrafts] = useState({});
+  const [batchDrafts, setBatchDrafts] = useState({});   // optional lot / batch per line
+  const [expiryDrafts, setExpiryDrafts] = useState({}); // optional expiry per line
+  const [portalNote, setPortalNote] = useState(null);   // did this reach the client portal?
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmingF1, setConfirmingF1] = useState(false);
@@ -142,17 +145,64 @@ export default function ReceiveDelivery() {
   // Step 1: save quantities + mark In Progress (no F1 here)
   async function confirmReceipt() {
     setSaving(true);
+    setPortalNote(null);
+    const today = new Date().toISOString().slice(0, 10);
+    const published = [];
+    const skipped = [];
+
     for (const line of lines) {
       const qty = parseFloat(drafts[line.id]) || 0;
+      const batchNo = (batchDrafts[line.id] || '').trim() || null;
+      const expiry = expiryDrafts[line.id] || null;
+
       await supabase.from('stock_lines')
-        .update({ qty_actual: qty, date_in: new Date().toISOString().slice(0, 10) })
+        .update({
+          qty_actual: qty,
+          date_in: today,
+          received_date: today,   // what actually landed, vs the booked date
+          batch_no: batchNo,
+          expiry_date: expiry,
+        })
         .eq('id', line.id);
+
       await log('receive_delivery', line.id, selected.movement_no, {
         sku: line.sku, description: line.description, qty_confirmed: qty,
+        batch_no: batchNo, expiry_date: expiry,
       });
+
+      // Publish to the client portal as a stock batch. Only works when the
+      // movement resolves to a client account — plenty of movements are for
+      // non-portal customers, so a failure here must not block receiving.
+      if (qty > 0) {
+        const { error: pErr } = await supabase.rpc('staff_receive_stock_line', {
+          p_stock_line_id: line.id,
+          p_received_date: today,
+          p_batch_no: batchNo,
+          p_expiry_date: expiry,
+        });
+        if (pErr) skipped.push({ sku: line.sku || line.description, reason: pErr.message });
+        else published.push(line.sku || line.description);
+      }
     }
+
     await supabase.from('movements').update({ status: 'In Progress' }).eq('id', selected.id);
     setSelected((p) => ({ ...p, status: 'In Progress' }));
+
+    if (published.length) {
+      setPortalNote({ kind: 'ok', text: `${published.length} item${published.length === 1 ? '' : 's'} now visible in the client portal.` });
+    } else if (skipped.length) {
+      const noClient = skipped.some((x) => x.reason?.includes('NO_CLIENT_FOR_MOVEMENT'));
+      const noSku = skipped.some((x) => x.reason?.includes('STOCK_LINE_HAS_NO_SKU'));
+      setPortalNote({
+        kind: 'info',
+        text: noClient
+          ? 'Saved. Not shown in a client portal — this movement isn\u2019t linked to a portal client.'
+          : noSku
+          ? 'Saved. Items need a SKU before they can appear in a client portal.'
+          : 'Saved. Could not publish to the client portal.',
+      });
+    }
+
     setReceived(true);
     setSaving(false);
   }
@@ -319,6 +369,33 @@ export default function ReceiveDelivery() {
                               />
                             </div>
                           </div>
+
+                          {/* Batch and expiry — both optional. Not every
+                              product is lot- or date-controlled. */}
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className="flex-1">
+                              <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                                Batch / Lot <span className="text-slate-300">· optional</span>
+                              </label>
+                              <input
+                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 text-slate-700 text-sm font-mono focus:outline-none focus:border-violet-400"
+                                value={batchDrafts[line.id] || ''}
+                                onChange={(e) => setBatchDrafts((p) => ({ ...p, [line.id]: e.target.value }))}
+                                placeholder="—"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                                Expiry <span className="text-slate-300">· optional</span>
+                              </label>
+                              <input
+                                type="date"
+                                className="w-full px-3 py-2 rounded-xl border-2 border-slate-200 text-slate-700 text-sm focus:outline-none focus:border-violet-400"
+                                value={expiryDrafts[line.id] || ''}
+                                onChange={(e) => setExpiryDrafts((p) => ({ ...p, [line.id]: e.target.value }))}
+                              />
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -346,6 +423,15 @@ export default function ReceiveDelivery() {
                       </span>
                     </div>
                   ))}
+                  {portalNote && (
+                    <div className={`mt-3 px-3 py-2 rounded-xl text-[11px] font-medium ${
+                      portalNote.kind === 'ok'
+                        ? 'bg-teal-50 text-teal-800 border border-teal-100'
+                        : 'bg-slate-50 text-slate-500 border border-slate-200'
+                    }`}>
+                      {portalNote.text}
+                    </div>
+                  )}
                 </div>
               )}
             </StepCard>

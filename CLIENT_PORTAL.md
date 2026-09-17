@@ -39,6 +39,17 @@ purpose**: historic stock is keyed on `movements.company_name` as free text, so
 running it blind creates one client account per spelling variant. Deduplicate
 the company names first.
 
+### 3. `supabase/client_portal_ops.sql`
+
+The ops loop: the trigger that mirrors warehouse pick-list progress onto the
+client's order, dispatch bookkeeping, `staff_receive_stock_line()` and the
+`fulfilment_requests` view.
+
+### 4. `supabase/client_portal_admin.sql`
+
+Everything the Clients screen needs — create clients, issue and revoke portal
+logins, edit the cut-off. After this, none of the above needs the SQL editor.
+
 ---
 
 ## Creating a client account
@@ -190,43 +201,59 @@ UI** — see below.
 
 ## State of the MVP
 
-Built:
+All 11 items are built:
 
 1. ✅ Client accounts and permissions — `clients`, `client_users`, RLS
-2. ✅ Customer-specific stock visibility — `/portal/inventory`, batch drill-down
-3. ✅ Receiving date field — `stock_batches.received_date`
-4. ✅ Optional expiry field — nullable, `track_expiry` per product
-6. ✅ PO / DO generation — `next_document_no()`, `ORD-2026-0001` / `DO-2026-0001`
-7. ✅ Stock validation and allocation — `portal_create_order`, FEFO
-9. ✅ Delivery cut-off logic — `next_delivery_date()`, configurable
-11. ✅ Client order history — `/portal/orders`, live status via realtime
+2. ✅ Customer-specific stock visibility — `/portal/inventory` with batch drill-down
+3. ✅ Receiving date — captured in Brood, stored on `stock_batches.received_date`
+4. ✅ Optional expiry — nullable, per-product `track_expiry`, renders "N/A"
+5. ✅ Client order creation — `/portal/orders/new`
+6. ✅ PO / DO generation — `ORD-2026-0001` / `DO-2026-0001`
+7. ✅ Stock validation and allocation — FEFO, in one transaction
+8. ✅ Warehouse fulfilment notification — Hive → Fulfilment Requests
+9. ✅ Delivery cut-off logic — configurable from Hive → Clients
+10. ✅ Order status tracking — trigger-driven, live to the client
+11. ✅ Client order history — `/portal/orders`
 
-Still to build:
+### Verified end to end
 
-5. ⬜ **Client order creation UI** — `/portal/orders/new` is a placeholder. The
-   server side is done and `useClientOrders().createOrder()` calls it; what's
-   missing is the form: product picker with live available quantities,
-   delivery details, cut-off preview, confirmation.
-8. ⬜ **Warehouse fulfilment notification** — a "New Fulfilment Requests" queue
-   in Hive/Brood calling `staff_confirm_order()`, and status writeback from the
-   pick-list flow to `client_orders.status`.
-10. ⬜ **Order detail screen** — `/portal/orders/:id` with the status timeline
-   from `client_order_events`.
-- ⬜ **Admin UI for cut-off settings** — SQL-only today.
-- ⬜ **Receiving integration** — Brood's Receive Delivery should call
-  `staff_receive_stock()` so batches are created as goods land. Right now stock
-  only reaches the portal via the backfill or a manual call.
-- ⬜ **Shopify** — `client_orders.source` / `external_order_id` and the unique
+A full order was driven through the live database on 17 Sep 2026:
+
+```
+client submits 50 × OKI-500   → New          available 1150 → 1100, allocated 50
+ops accepts                   → Confirmed    DO-2026-0001 + Outbound movement created
+pick list created             → Confirmed
+pick list → Picking           → Picking
+pick list → Checking          → Picking      (correctly does not regress)
+pick list → Photo Pending     → Packed
+pick list → Awaiting Signature→ Out for Delivery
+pick list → Completed         → Completed    allocated 50 → 0, dispatched 50
+```
+
+Test data was removed and the document counters reset afterwards.
+
+### Still open
+
+- **The anon-key gap** — see Security model above. This is the one thing that
+  should block going live with more than one client.
+- **Shopify** — `client_orders.source` / `external_order_id` and the unique
   constraint are in place, so a webhook can create orders through the same
   function. Nothing is wired up.
-
----
+- **Per-client cut-off overrides** — the functions accept them
+  (`staff_set_delivery_settings` with a client id); the Clients screen only
+  edits the global default.
+- **Password reset email** — wired to `/portal/reset-password`, which has no
+  screen yet, so the link lands on the login page.
 
 ## Files
 
 ```
 supabase/client_portal_schema.sql   schema, RLS, functions
+supabase/client_portal_ops.sql      status trigger, dispatch, receiving, queue view
+supabase/client_portal_admin.sql    client + login + cut-off admin functions
 supabase/drop_pss_module.sql        PSS removal (destructive — read first)
+supabase/seed_demo_no_auth.sql      demo client and stock
+supabase/verify_client_portal.sql   read-only smoke test
 
 src/context/ClientAuthContext.jsx   Supabase Auth session + client resolution
 src/hooks/useClientStock.js         stock summary + batch detail
@@ -237,7 +264,13 @@ src/pages/portal/PortalLogin.jsx    email/password + password reset
 src/pages/portal/PortalDashboard.jsx
 src/pages/portal/PortalInventory.jsx
 src/pages/portal/PortalOrders.jsx
-src/pages/portal/PortalOrderNew.jsx placeholder
+src/pages/portal/PortalOrderNew.jsx
+src/pages/portal/PortalOrderDetail.jsx
+
+src/pages/FulfilmentRequestsPage.jsx  Hive: the client order queue
+src/pages/ClientsAdminPage.jsx        Hive: clients, logins, cut-off
+src/hooks/useFulfilmentRequests.js
+src/hooks/useClientAdmin.js
 
 backup/pss-module-2026-09-17.tgz    the removed PSS files
 ```
