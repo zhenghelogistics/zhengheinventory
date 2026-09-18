@@ -51,7 +51,7 @@ export default function PickListsPage() {
     if (!quiet) setLoading(true); else setRefreshing(true);
     const { data } = await supabase
       .from('pick_lists')
-      .select('*, movements(movement_no, company_name, type), pick_list_items(id)')
+      .select('*, movements(movement_no, company_name, type, source), pick_list_items(id)')
       .neq('status', 'Completed')
       .order('created_at', { ascending: false });
     setLists(data || []);
@@ -134,7 +134,14 @@ export default function PickListsPage() {
                 }`}
               >
                 <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <span className="font-mono font-bold text-slate-800">{pl.movements?.movement_no || '—'}</span>
+                  <span className="font-mono font-bold text-slate-800 flex items-center gap-1.5">
+                    {pl.movements?.movement_no || '—'}
+                    {pl.movements?.source === 'PORTAL' && (
+                      <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 text-[9px] font-black uppercase tracking-wide">
+                        Client
+                      </span>
+                    )}
+                  </span>
                   <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${STATUS_COLOR[pl.status] || 'bg-slate-100 text-slate-600'}`}>{pl.status}</span>
                 </div>
                 <div className="text-slate-600 font-semibold text-sm mb-1">{pl.movements?.company_name || 'No company'}</div>

@@ -9,6 +9,7 @@ import StockLinesTable from '../components/movement/StockLinesTable';
 import ReleaseOrderTable from '../components/movement/ReleaseOrderTable';
 import ConfirmationPanel from '../components/movement/ConfirmationPanel';
 import PickListPanel from '../components/movement/PickListPanel';
+import ClientOrderBanner from '../components/movement/ClientOrderBanner';
 import Toast from '../components/Toast';
 
 const STATUSES = ['New', 'In Progress', 'Completed', 'Voided'];
@@ -188,6 +189,8 @@ export default function MovementDetailPage() {
           </button>
         </div>
       </div>
+
+      <ClientOrderBanner movementId={movement.id} />
 
       {/* Content */}
       <div className="flex-1 overflow-auto">

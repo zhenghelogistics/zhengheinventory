@@ -222,7 +222,19 @@ export default function MovementListPage() {
                   {filtered.map((m) => {
                     return (
                       <tr key={m.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors cursor-pointer ${m.status === 'Voided' ? 'opacity-50' : ''}`} onClick={() => navigate(`/movements/${m.id}`)}>
-                        <td className="px-4 py-3 font-mono font-semibold text-blue-700">{m.movement_no || '—'}</td>
+                        <td className="px-4 py-3 font-mono font-semibold text-blue-700">
+                          <div className="flex items-center gap-1.5">
+                            {m.movement_no || '—'}
+                            {m.source === 'PORTAL' && (
+                              <span
+                                className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 text-[9px] font-black uppercase tracking-wide"
+                                title="Raised by a client in the Client Portal"
+                              >
+                                Portal
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${TYPE_COLORS[m.type] || 'bg-slate-100 text-slate-600'}`}>{m.type}</span></td>
                         <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[m.status] || 'bg-slate-100 text-slate-600'}`}>{m.status}</span></td>
                         <td className="px-4 py-3 text-slate-700 max-w-[160px] truncate">{m.company_name || '—'}</td>

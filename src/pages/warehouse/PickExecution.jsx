@@ -118,6 +118,7 @@ export default function PickExecution() {
   const { id } = useParams();
   const { user } = useWarehouseAuth();
   const [pl, setPl] = useState(null);
+  const [clientOrder, setClientOrder] = useState(null); // set when this pick list serves a portal order
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -139,10 +140,21 @@ export default function PickExecution() {
 
   async function fetchData() {
     const [plRes, itemsRes] = await Promise.all([
-      supabase.from('pick_lists').select('*, movements(movement_no, company_name)').eq('id', id).single(),
+      supabase.from('pick_lists').select('*, movements(movement_no, company_name, source)').eq('id', id).single(),
       supabase.from('pick_list_items').select('*').eq('pick_list_id', id).order('created_at'),
     ]);
     setPl(plRes.data);
+
+    // If this pick list serves a client-portal order, the picker needs the
+    // delivery details that came with it — not just the movement number.
+    if (plRes.data?.movement_id) {
+      const { data: ord } = await supabase
+        .from('fulfilment_requests')
+        .select('order_no, client_name, consignee_name, delivery_address, delivery_contact_name, delivery_contact_phone, delivery_instructions, scheduled_date, do_number')
+        .eq('movement_id', plRes.data.movement_id)
+        .maybeSingle();
+      setClientOrder(ord || null);
+    }
     setItems(itemsRes.data || []);
     setLoading(false);
   }
@@ -243,6 +255,39 @@ export default function PickExecution() {
           </div>
         )}
       </div>
+
+      {/* Client order context — where this is actually going. */}
+      {clientOrder && (
+        <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="px-2 py-0.5 rounded-full bg-teal-700 text-white text-[9px] font-black uppercase tracking-wide">
+              Client Order
+            </span>
+            <span className="font-mono text-xs font-bold text-teal-900">
+              {clientOrder.do_number || clientOrder.order_no}
+            </span>
+          </div>
+          <div className="text-sm font-bold text-teal-900">
+            {clientOrder.consignee_name || clientOrder.client_name}
+          </div>
+          <div className="text-xs text-teal-800 mt-0.5 whitespace-pre-line">
+            {clientOrder.delivery_address}
+          </div>
+          {(clientOrder.delivery_contact_name || clientOrder.delivery_contact_phone) && (
+            <div className="text-xs text-teal-800/80 mt-1">
+              {[clientOrder.delivery_contact_name, clientOrder.delivery_contact_phone].filter(Boolean).join(' · ')}
+            </div>
+          )}
+          {clientOrder.delivery_instructions && (
+            <div className="text-xs text-teal-900 mt-1.5 font-semibold">
+              ⚠ {clientOrder.delivery_instructions}
+            </div>
+          )}
+          <div className="text-[11px] text-teal-700/80 mt-1.5">
+            Deliver {clientOrder.scheduled_date} · the customer is tracking this live
+          </div>
+        </div>
+      )}
 
       {/* ── Step 1: Pick ── */}
       <StepCard
