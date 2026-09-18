@@ -7,6 +7,7 @@ import PortalInventory from './pages/portal/PortalInventory';
 import PortalOrders from './pages/portal/PortalOrders';
 import PortalOrderNew from './pages/portal/PortalOrderNew';
 import PortalOrderDetail from './pages/portal/PortalOrderDetail';
+import PortalResetPassword from './pages/portal/PortalResetPassword';
 import PortalSwitcher from './components/PortalSwitcher';
 import MovementListPage from './pages/MovementListPage';
 import MovementDetailPage from './pages/MovementDetailPage';
@@ -147,6 +148,17 @@ export default function App() {
     <WarehouseAuthProvider>
       <Routes>
         <Route path="/" element={<PortalSelectPage />} />
+        {/* Password recovery sits outside the layout's guard: the visitor
+            holds a recovery session but hasn't really signed in, and needs a
+            password form rather than their dashboard. */}
+        <Route
+          path="/portal/reset-password"
+          element={
+            <ClientAuthProvider>
+              <PortalResetPassword />
+            </ClientAuthProvider>
+          }
+        />
         {/* Customer-facing Client Portal. Guarded by ClientAuthContext —
             an unauthenticated visitor gets the login screen, never a layout. */}
         <Route
